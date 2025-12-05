@@ -1,0 +1,13 @@
+# Provider crates will be added here.
+#
+# Planned providers:
+# - provider-email-imap   (Gmail, Outlook, generic IMAP)
+# - provider-rss          (RSS/Atom feeds)
+# - provider-spotify      (Playlists, liked tracks)
+# - provider-youtube      (Subscriptions, playlists, watch-later)
+# - provider-reddit       (Home, subreddits, saved)
+# - provider-mstodo       (Microsoft To Do tasks)
+# - provider-calendar     (Microsoft Calendar events)
+# - provider-bookmarks    (Local + buku integration)
+#
+# Each provider will be a separate crate implementing traits from fusabi-streams-core.
