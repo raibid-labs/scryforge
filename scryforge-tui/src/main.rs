@@ -174,7 +174,10 @@ impl App {
                 title: "Meeting tomorrow at 10am".to_string(),
                 content: ItemContent::Email {
                     subject: "Meeting tomorrow at 10am".to_string(),
-                    body_text: Some("Hi,\n\nJust a reminder about our meeting tomorrow.\n\nBest,\nJohn".to_string()),
+                    body_text: Some(
+                        "Hi,\n\nJust a reminder about our meeting tomorrow.\n\nBest,\nJohn"
+                            .to_string(),
+                    ),
                     body_html: None,
                     snippet: "Just a reminder about our meeting...".to_string(),
                 },
@@ -199,7 +202,9 @@ impl App {
                 title: "Your order has shipped".to_string(),
                 content: ItemContent::Email {
                     subject: "Your order has shipped".to_string(),
-                    body_text: Some("Your order #12345 has shipped and will arrive by Friday.".to_string()),
+                    body_text: Some(
+                        "Your order #12345 has shipped and will arrive by Friday.".to_string(),
+                    ),
                     body_html: None,
                     snippet: "Your order #12345 has shipped...".to_string(),
                 },
@@ -223,7 +228,9 @@ impl App {
                 stream_id: StreamId::new("rss", "feed", "hackernews"),
                 title: "Show HN: A new Rust TUI framework".to_string(),
                 content: ItemContent::Article {
-                    summary: Some("I've been working on a new TUI framework in Rust...".to_string()),
+                    summary: Some(
+                        "I've been working on a new TUI framework in Rust...".to_string(),
+                    ),
                     full_content: None,
                 },
                 author: Some(fusabi_streams_core::Author {
@@ -267,9 +274,9 @@ impl App {
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Min(0),      // Content
-                Constraint::Length(3),   // Omnibar
-                Constraint::Length(1),   // Status bar
+                Constraint::Min(0),    // Content
+                Constraint::Length(3), // Omnibar
+                Constraint::Length(1), // Status bar
             ])
             .split(size);
 
@@ -277,9 +284,9 @@ impl App {
         let content_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(20),  // Streams
-                Constraint::Percentage(35),  // Items
-                Constraint::Percentage(45),  // Preview
+                Constraint::Percentage(20), // Streams
+                Constraint::Percentage(35), // Items
+                Constraint::Percentage(45), // Preview
             ])
             .split(main_chunks[0]);
 

@@ -186,10 +186,7 @@ impl<'a> ItemListWidget<'a> {
 
                 // Unread indicator
                 if !item.is_read {
-                    spans.push(Span::styled(
-                        "● ",
-                        Style::default().fg(self.theme.unread),
-                    ));
+                    spans.push(Span::styled("● ", Style::default().fg(self.theme.unread)));
                 }
 
                 // Title
@@ -312,12 +309,16 @@ fn extract_preview_text(content: &fusabi_streams_core::ItemContent) -> String {
         Text(s) => s.clone(),
         Markdown(s) => s.clone(), // TODO: render markdown
         Html(s) => s.clone(),     // TODO: strip HTML tags
-        Email { snippet, body_text, .. } => {
-            body_text.clone().unwrap_or_else(|| snippet.clone())
-        }
-        Article { summary, full_content } => {
-            full_content.clone().or_else(|| summary.clone()).unwrap_or_default()
-        }
+        Email {
+            snippet, body_text, ..
+        } => body_text.clone().unwrap_or_else(|| snippet.clone()),
+        Article {
+            summary,
+            full_content,
+        } => full_content
+            .clone()
+            .or_else(|| summary.clone())
+            .unwrap_or_default(),
         Video { description, .. } => description.clone(),
         Track { album, artists, .. } => {
             let artist_str = artists.join(", ");
@@ -327,7 +328,11 @@ fn extract_preview_text(content: &fusabi_streams_core::ItemContent) -> String {
             }
         }
         Task { body, .. } => body.clone().unwrap_or_default(),
-        Event { description, location, .. } => {
+        Event {
+            description,
+            location,
+            ..
+        } => {
             let desc = description.clone().unwrap_or_default();
             match location {
                 Some(loc) => format!("{desc}\n\nLocation: {loc}"),
@@ -361,19 +366,13 @@ impl<'a> StatusBarWidget<'a> {
 
     pub fn render(self, frame: &mut Frame, area: Rect) {
         let spans = vec![
-            Span::styled(
-                self.message,
-                Style::default().fg(self.theme.foreground),
-            ),
+            Span::styled(self.message, Style::default().fg(self.theme.foreground)),
             Span::raw(" | "),
-            Span::styled(
-                self.provider_status,
-                Style::default().fg(self.theme.accent),
-            ),
+            Span::styled(self.provider_status, Style::default().fg(self.theme.accent)),
         ];
 
-        let paragraph = Paragraph::new(Line::from(spans))
-            .style(Style::default().bg(self.theme.selection_bg));
+        let paragraph =
+            Paragraph::new(Line::from(spans)).style(Style::default().bg(self.theme.selection_bg));
 
         frame.render_widget(paragraph, area);
     }
@@ -429,10 +428,7 @@ impl<'a> OmnibarWidget<'a> {
             .border_style(Style::default().fg(border_color));
 
         let display_text = if self.input.is_empty() {
-            Span::styled(
-                self.placeholder,
-                Style::default().fg(self.theme.muted),
-            )
+            Span::styled(self.placeholder, Style::default().fg(self.theme.muted))
         } else {
             Span::raw(self.input)
         };

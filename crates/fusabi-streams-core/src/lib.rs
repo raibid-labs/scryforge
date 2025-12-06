@@ -198,14 +198,10 @@ pub enum ItemContent {
     },
 
     /// Bookmark content
-    Bookmark {
-        description: Option<String>,
-    },
+    Bookmark { description: Option<String> },
 
     /// Generic/fallback content
-    Generic {
-        body: Option<String>,
-    },
+    Generic { body: Option<String> },
 }
 
 /// Author/creator information.
@@ -451,9 +447,9 @@ pub trait HasCommunities: Provider {
 
 pub mod prelude {
     pub use crate::{
-        Action, ActionKind, ActionResult, Author, Collection, CollectionId, Community,
-        CommunityId, Feed, FeedId, FeedOptions, HasCollections, HasCommunities, HasFeeds,
-        HasSavedItems, Item, ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth,
-        Result, SavedItemsOptions, Stream, StreamError, StreamId, StreamType, SyncResult,
+        Action, ActionKind, ActionResult, Author, Collection, CollectionId, Community, CommunityId,
+        Feed, FeedId, FeedOptions, HasCollections, HasCommunities, HasFeeds, HasSavedItems, Item,
+        ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth, Result,
+        SavedItemsOptions, Stream, StreamError, StreamId, StreamType, SyncResult,
     };
 }
