@@ -6,6 +6,8 @@ members = [
     "crates/fusabi-tui-widgets",
     "scryforge-daemon",
     "scryforge-tui",
+    # Provider crates:
+    "providers/provider-dummy",
     # Future provider crates will be added here:
     # "providers/provider-email-imap",
     # "providers/provider-rss",
