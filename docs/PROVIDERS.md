@@ -455,3 +455,235 @@ impl HasFeeds for ExampleProvider {
     }
 }
 ```
+
+## Provider Loading Flow
+
+This section describes how providers are loaded and managed by the daemon.
+
+### 1. Provider Registration
+
+During daemon startup, providers are registered with the `ProviderRegistry`:
+
+```rust
+// In scryforge-daemon/src/main.rs
+let mut registry = registry::ProviderRegistry::new();
+
+// Register providers
+registry.register(provider_dummy::DummyProvider::new());
+registry.register(provider_rss::RssProvider::new(config));
+registry.register(provider_email::EmailProvider::new(config));
+// ... register other providers
+```
+
+The registry stores providers as `Arc<dyn Provider>` trait objects, enabling runtime polymorphism and safe concurrent access across multiple threads.
+
+### 2. Provider Registry
+
+The `ProviderRegistry` in `scryforge-daemon/src/registry.rs` manages all loaded providers:
+
+```rust
+pub struct ProviderRegistry {
+    providers: HashMap<String, Arc<dyn Provider>>,
+}
+```
+
+Key operations:
+- **`register<P: Provider>(&mut self, provider: P)`** - Register a new provider
+- **`get(&self, id: &str) -> Option<Arc<dyn Provider>>`** - Retrieve a provider by ID
+- **`list(&self) -> Vec<&str>`** - List all registered provider IDs
+- **`count(&self) -> usize`** - Get the number of registered providers
+- **`contains(&self, id: &str) -> bool`** - Check if a provider is registered
+- **`remove(&mut self, id: &str) -> Option<Arc<dyn Provider>>`** - Remove a provider
+- **`clear(&mut self)`** - Remove all providers
+
+### 3. Provider Discovery
+
+Clients (TUI, API, etc.) can discover providers through the registry:
+
+```rust
+// List all available providers
+let provider_ids = registry.list();
+println!("Available providers: {:?}", provider_ids);
+
+// Get a specific provider
+if let Some(provider) = registry.get("rss") {
+    println!("Found provider: {}", provider.name());
+
+    // Check capabilities
+    let caps = provider.capabilities();
+    if caps.has_feeds {
+        // This provider supports feeds
+    }
+}
+```
+
+### 4. Provider Usage
+
+Once retrieved from the registry, providers can be used through their trait methods:
+
+#### Health Checks
+```rust
+let provider = registry.get("dummy").unwrap();
+let health = provider.health_check().await?;
+println!("Provider healthy: {}", health.is_healthy);
+```
+
+#### Synchronization
+```rust
+let result = provider.sync().await?;
+println!("Sync complete: {} items added, {} updated",
+         result.items_added, result.items_updated);
+```
+
+#### Accessing Feeds (for providers with `HasFeeds`)
+```rust
+// List feeds
+let feeds = provider.list_feeds().await?;
+for feed in &feeds {
+    println!("Feed: {} ({} unread)", feed.name, feed.unread_count.unwrap_or(0));
+}
+
+// Get feed items
+let options = FeedOptions {
+    limit: Some(50),
+    include_read: false,
+    since: None,
+    offset: None,
+};
+let items = provider.get_feed_items(&feeds[0].id, options).await?;
+```
+
+### 5. Dummy Provider
+
+The `provider-dummy` crate serves as a reference implementation and testing fixture:
+
+**Location**: `providers/provider-dummy/src/lib.rs`
+
+**Purpose**:
+- Demonstrates proper implementation of `Provider` and `HasFeeds` traits
+- Returns static fixture data for testing
+- Provides a working example for new provider implementations
+- Enables testing of the daemon and TUI without external dependencies
+
+**Example Usage**:
+```rust
+use provider_dummy::DummyProvider;
+
+let provider = DummyProvider::new();
+assert_eq!(provider.id(), "dummy");
+
+let feeds = provider.list_feeds().await?;
+// Returns 3 static feeds: inbox, updates, archive
+
+let items = provider.get_feed_items(&feeds[0].id, FeedOptions::default()).await?;
+// Returns static test items
+```
+
+**Test Coverage**:
+- Basic provider functionality (ID, name, capabilities)
+- Health checks and sync operations
+- Feed listing and item retrieval
+- Filtering by read status, limit, offset
+- Available actions and action execution
+
+### 6. Integration Testing
+
+The daemon includes smoke tests to verify provider registry functionality:
+
+**Location**: `scryforge-daemon/tests/registry_test.rs`
+
+**Tests**:
+- `test_registry_discovery` - Verifies providers can be registered and discovered
+- `test_registry_provider_access` - Tests provider retrieval from registry
+- `test_registry_provider_health_check` - Validates health check operations
+- `test_registry_provider_capabilities` - Checks capability reporting
+- `test_registry_provider_sync` - Tests synchronization operations
+- `test_registry_multiple_providers` - Verifies multiple provider support
+- `test_registry_remove_provider` - Tests provider removal
+- `test_registry_clear` - Tests clearing all providers
+
+Run the tests:
+```bash
+cd /home/beengud/raibid-labs/scryforge
+CARGO_TARGET_DIR=./target cargo test --workspace
+```
+
+### 7. Future Provider Loading
+
+In future phases, the daemon will support:
+
+- **Dynamic loading**: Load providers from shared libraries (.so/.dylib/.dll)
+- **Configuration-based loading**: Enable/disable providers via config file
+- **Hot reloading**: Reload providers without restarting the daemon
+- **Version compatibility**: Check provider API versions
+- **Dependency injection**: Pass shared resources (cache, HTTP client) to providers
+
+### Provider Lifecycle
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                    Daemon Startup                            │
+└─────────────────┬───────────────────────────────────────────┘
+                  │
+                  ▼
+        ┌─────────────────────┐
+        │ Create Registry     │
+        └─────────┬───────────┘
+                  │
+                  ▼
+        ┌─────────────────────┐
+        │ Register Providers  │◄──── DummyProvider
+        └─────────┬───────────┘      RssProvider
+                  │                   EmailProvider
+                  │                   etc.
+                  ▼
+        ┌─────────────────────┐
+        │ Health Check All    │
+        └─────────┬───────────┘
+                  │
+                  ▼
+        ┌─────────────────────┐
+        │ Start API Server    │
+        └─────────┬───────────┘
+                  │
+                  ▼
+        ┌─────────────────────┐
+        │ Handle API Calls    │──────► list_providers()
+        │                     │──────► get_provider(id)
+        │                     │──────► list_feeds(provider_id)
+        │                     │──────► get_items(provider_id, feed_id)
+        └─────────┬───────────┘
+                  │
+                  ▼
+        ┌─────────────────────┐
+        │ Background Sync     │──────► provider.sync()
+        │ Loop                │        (periodic)
+        └─────────────────────┘
+```
+
+### Adding a Provider to the Daemon
+
+1. **Add dependency** in `scryforge-daemon/Cargo.toml`:
+   ```toml
+   [dependencies]
+   provider-my-service = { path = "../providers/provider-my-service" }
+   ```
+
+2. **Register in main.rs**:
+   ```rust
+   registry.register(provider_my_service::MyServiceProvider::new());
+   ```
+
+3. **Verify registration**:
+   ```rust
+   let provider_ids = registry.list();
+   assert!(provider_ids.contains(&"my-service"));
+   ```
+
+4. **Add configuration** (if needed):
+   ```rust
+   let config = load_provider_config("my-service")?;
+   registry.register(provider_my_service::MyServiceProvider::new(config));
+   ```
+
+See the dummy provider implementation in `providers/provider-dummy/src/lib.rs` for a complete working example.
