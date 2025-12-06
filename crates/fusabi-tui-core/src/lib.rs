@@ -16,8 +16,8 @@
 //! complete TUI applications. The typical pattern is:
 //!
 //! 1. Define your application state implementing [`AppState`]
-//! 2. Create a [`Terminal`] wrapper
-//! 3. Run the event loop with [`run_app`]
+//! 2. Create a [`TerminalWrapper`]
+//! 3. Handle events with [`poll_event`] in your event loop
 
 use anyhow::Result;
 use crossterm::{
