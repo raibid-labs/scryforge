@@ -19,3 +19,8 @@ serde_json.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true
+chrono.workspace = true
+jsonrpsee = { version = "0.24", features = ["server", "macros"] }
+
+[dev-dependencies]
+tempfile = "3.8"

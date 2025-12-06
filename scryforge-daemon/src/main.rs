@@ -53,6 +53,8 @@ use anyhow::Result;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
+mod api;
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
@@ -63,35 +65,22 @@ async fn main() -> Result<()> {
 
     info!("Starting scryforge-daemon v{}", env!("CARGO_PKG_VERSION"));
 
-    // TODO: Load configuration from config.toml
-    // let config = load_config()?;
-
-    // TODO: Initialize provider registry
-    // let registry = ProviderRegistry::new();
-    // registry.register(DummyProvider::new());
-
-    // TODO: Initialize cache (SQLite)
-    // let cache = Cache::open(&config.cache_path)?;
-
-    // TODO: Connect to Sigilforge for auth
-    // let sigilforge = SigilforgeClient::connect(&config.sigilforge_socket)?;
-
-    // TODO: Start sync loop
-    // let sync_handle = tokio::spawn(sync_loop(registry.clone(), cache.clone()));
-
-    // TODO: Start API server
-    // let api_server = ApiServer::new(registry, cache);
-    // api_server.listen(&config.socket_path).await?;
+    // Start the JSON-RPC API server
+    let (server_handle, addr) = api::start_server().await?;
 
     info!("Daemon startup complete");
-    info!("Socket: TODO - not yet implemented");
+    info!("Listening on: {}", addr);
     info!("Press Ctrl+C to stop");
 
-    // For now, just wait indefinitely
-    // In the real implementation, this would be replaced by the API server
+    // Wait for shutdown signal
     tokio::signal::ctrl_c().await?;
 
     info!("Shutting down...");
+
+    // Stop the server gracefully
+    server_handle.stop()?;
+
+    info!("Daemon stopped");
     Ok(())
 }
 
@@ -113,10 +102,6 @@ async fn main() -> Result<()> {
 
 // mod sync {
 //     //! Background sync loop for fetching new data
-// }
-
-// mod api {
-//     //! JSON-RPC API server implementation
 // }
 
 // mod sigilforge {
