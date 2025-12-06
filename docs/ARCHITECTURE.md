@@ -1,286 +1,258 @@
 # Scryforge Architecture
 
-This document describes the technical architecture of Scryforge, including workspace layout, crate responsibilities, the daemon API, and the plugin model.
+## Goals
 
-## Workspace Layout
+Scryforge should:
 
-```
-scryforge/
-├── Cargo.toml                      # Workspace root with shared dependencies
-│
-├── crates/                         # Fusabi ecosystem crates (potentially extractable)
-│   ├── fusabi-streams-core/        # Core traits and types
-│   ├── fusabi-tui-core/            # TUI framework primitives
-│   └── fusabi-tui-widgets/         # Reusable TUI widgets
-│
-├── scryforge-daemon/               # The hub daemon binary
-├── scryforge-tui/                  # The TUI client binary
-│
-├── providers/                      # Provider implementations
-│   ├── provider-email-imap/        # (future) IMAP email provider
-│   ├── provider-rss/               # (future) RSS/Atom feed provider
-│   ├── provider-spotify/           # (future) Spotify API provider
-│   ├── provider-youtube/           # (future) YouTube API provider
-│   ├── provider-reddit/            # (future) Reddit API provider
-│   ├── provider-mstodo/            # (future) Microsoft To Do/Calendar
-│   └── provider-bookmarks/         # (future) Local bookmarks + buku
-│
-└── docs/                           # Documentation
-```
+- Act as a *central read layer* for many information services.
+- Provide a **fast, keyboard-driven TUI** for exploring information across accounts.
+- Be **plugin-based**, with most integration logic living in providers and Fusabi scripts.
+- Expose a **daemon API** that other tools (CLI, Scarab agents, future GUIs) can call.
+- Grow the **Fusabi ecosystem** with reusable crates and packages.
 
-## Crate Responsibilities
+## High-Level Components
 
-### `fusabi-streams-core`
+Scryforge has three main runtime components:
 
-The foundational crate defining the data model and provider capabilities:
+1. **Daemon (Hub)**
+2. **TUI client**
+3. **Provider plugins (Rust + Fusabi)**
 
-- **Types**: `StreamId`, `ItemId`, `Stream`, `Item`, `ItemContent`, `Action`
-- **Traits**: `HasFeeds`, `HasCollections`, `HasSavedItems`, `HasCommunities`
-- **Provider trait**: `Provider` (the base trait all providers implement)
+### 1. Daemon (Hub)
 
-This crate is designed to be extracted into `fusabi-community` as a standalone package that other Fusabi-based apps can use.
+The daemon is responsible for:
 
-### `fusabi-tui-core`
+- Loading provider plugins (as Rust crates and/or Fusabi `.fzb` bundles).
+- Querying remote services (email, RSS, media APIs, etc.).
+- Normalizing results into a common **Stream / Item** model.
+- Caching results locally and managing sync.
+- Calling **Sigilforge** to obtain and refresh credentials/tokens.
+- Exposing a local API (Unix socket or TCP, JSON-RPC or similar).
 
-Basic TUI infrastructure for Ratatui-based Fusabi applications:
+It knows **nothing** about terminal UI details. It just serves streams and items.
 
-- Event loop abstraction
-- State management primitives
-- Input handling framework
-- Async command dispatch
+### 2. TUI Client
 
-### `fusabi-tui-widgets`
+The TUI is a separate process that:
 
-Reusable TUI widgets:
+- Uses **Ratatui** for layout and rendering.
+- Provides explorer-like navigation inspired by tools like *yazi* and *broot*:
+  - Sidebars for streams and collections
+  - Main list for items
+  - Preview pane
+  - Omnibar / command palette for filtering and commands
+- Communicates exclusively with the daemon API.
+- May load Fusabi `.fsx` scripts on the client side for:
+  - Custom keybindings
+  - Layout tweaks
+  - Command palette actions
+  - Convenience transforms (e.g., custom views across streams)
 
-- **StreamList**: Sidebar showing available streams
-- **ItemList**: Scrollable list of items with filtering
-- **PreviewPane**: Rich preview of selected item
-- **StatusBar**: Connection status, sync state, notifications
-- **Omnibar**: Command palette / quick search
+### 3. Provider Plugins
 
-### `scryforge-daemon`
+Providers are responsible for communicating with specific services and implementing
+**capability traits**. Each provider indicates which capabilities it supports.
 
-The hub daemon responsible for:
+Examples:
 
-- Loading and managing provider plugins
-- Periodic sync and caching of stream data
-- Token retrieval from Sigilforge
-- Exposing the daemon API over Unix socket or TCP
-- Managing local state (SQLite or similar)
+- `provider-email-imap`
+- `provider-rss`
+- `provider-spotify`
+- `provider-youtube`
+- `provider-reddit`
+- `provider-bookmarks`
+- `provider-msgraph` (To Do + Calendar)
 
-### `scryforge-tui`
+Providers are implemented as Rust crates that can be compiled to `.fzb` Fusabi
+plugins for the daemon.
 
-The terminal user interface:
+They never handle raw secrets directly: they ask **Sigilforge** via a client
+library for tokens and credentials.
 
-- Connects to daemon via local API
-- Renders streams and items using fusabi-tui-widgets
-- Handles user input and navigation
-- Supports theming and customization
+## Core Domain Model
 
-## Daemon API
+### Streams
 
-The daemon exposes a local API for clients. The recommended transport is:
+A **Stream** is a logical grouping of items:
 
-- **Unix socket** at `$XDG_RUNTIME_DIR/scryforge/daemon.sock` (or similar)
-- **JSON-RPC 2.0** protocol for request/response
+- Email folders (INBOX, Archive, etc.)
+- RSS feeds
+- Spotify playlists
+- YouTube playlists or subscription feeds
+- Reddit home timeline and individual subreddits
+- Medium publications
+- Saved items, watch-later lists, liked songs
+- Bookmark folders
+- Task lists (e.g., Microsoft To Do)
+- Calendar time windows (Today, This Week, etc.)
 
-### API Methods (Draft)
+`Stream` fields typically include:
 
-```
-// Stream discovery
-streams.list() -> Stream[]
-streams.get(stream_id) -> Stream
+- Stable ID
+- Provider ID / type
+- Human-readable name
+- Capability type(s)
+- Optional filters / query parameters
 
-// Item retrieval
-items.list(stream_id, options?) -> Item[]
-items.get(item_id) -> Item
-items.search(query, options?) -> Item[]
+### Items
 
-// Actions
-actions.available(item_id) -> Action[]
-actions.execute(item_id, action_name, params?) -> ActionResult
+An **Item** is a single entry within a stream, e.g.:
 
-// Provider management
-providers.list() -> ProviderInfo[]
-providers.status(provider_id) -> ProviderStatus
-providers.sync(provider_id?) -> SyncResult
+- Email message
+- RSS article
+- Reddit post
+- Spotify track
+- YouTube video
+- Medium article
+- Bookmark
+- Task
+- Calendar event
 
-// Cross-stream views
-views.feeds() -> Item[]       // Unified feed view
-views.saved() -> Item[]       // All saved items
-views.collections() -> Collection[]
-```
+Items have:
 
-### Request/Response Format
+- Stable ID and provider ID
+- Timestamps (published, updated)
+- Title / subject
+- Summary / snippet / short content
+- Link(s) (canonical URL, provider UI link)
+- Provider-specific metadata (e.g., labels for email, subreddit name)
+- Local metadata (tags, pinned state, local notes) managed by Scryforge
 
-```json
-// Request
-{
-  "jsonrpc": "2.0",
-  "method": "streams.list",
-  "params": {},
-  "id": 1
-}
+### Provider Capabilities
 
-// Response
-{
-  "jsonrpc": "2.0",
-  "result": [
-    {"id": "email:gmail:inbox", "name": "Gmail Inbox", "provider": "email-imap", ...},
-    {"id": "rss:hackernews", "name": "Hacker News", "provider": "rss", ...}
-  ],
-  "id": 1
-}
-```
+Rather than hard-coding provider types, Scryforge relies on a set of capabilities
+that providers can declare and implement.
+
+Initial capability traits:
+
+- `HasFeeds`
+  - Exposes a list of logical feeds/streams that behave like timelines.
+  - Examples: RSS feeds, email folders, YouTube subscriptions, Medium feeds.
+
+- `HasCollections`
+  - Exposes named collections with ordered items.
+  - Examples: Spotify playlists, bookmark folders.
+
+- `HasSavedItems`
+  - Exposes items explicitly saved/bookmarked by the user.
+  - Examples: Reddit saved, Medium bookmarks, YouTube watch-later, Spotify liked songs, browser bookmarks.
+
+- `HasCommunities`
+  - Exposes "membership" or subscription relationships.
+  - Examples: subscribed subreddits, followed channels, Medium publications, RSS feed list.
+
+- `HasTasks` and `HasCalendar` (for MS Graph or similar)
+  - To expose task lists and calendar views.
+
+The daemon queries providers and merges results into a unified `Stream`/`Item`
+schema used by the TUI and external clients.
+
+## Read-Only MVP
+
+For MVP:
+
+- Scryforge is **read-only** for content operations:
+  - No sending email
+  - No posting to social media
+  - No editing content on remote services
+- Limited local actions are allowed:
+  - Local tagging
+  - Pinning
+  - Local notes
+  - "Mark as read" for Scryforge-only local state (initially)
+- External write operations (e.g., editing playlists, bookmarking in providers)
+  may be added later, once the core abstractions and UX are stable.
+
+This drastically simplifies:
+
+- Implementation complexity
+- Surface area for bugs
+- OAuth scopes
+- UI/UX design for destructive operations
+
+## Daemon–TUI API
+
+The internal API is intentionally narrow. Representative endpoints / RPC
+methods might include:
+
+- `ListStreams() -> [Stream]`
+- `ListItems(stream_id, cursor) -> ItemPage`
+- `GetItem(item_id) -> Item`
+- `GetItemPreview(item_id) -> RenderableContent`
+- `RunLocalAction(item_id, action_id, params) -> Item` (local tagging, etc.)
+
+The details of the transport (Unix socket vs TCP, JSON-RPC vs custom protocol)
+are left open for early experimentation, but the contract is "TUI and other
+clients talk to daemon via a documented API; providers never talk directly
+to the TUI."
 
 ## Authentication via Sigilforge
 
-Scryforge does NOT manage OAuth tokens, API keys, or credentials directly. Instead, it delegates to **Sigilforge**, a separate daemon in the raibid-labs ecosystem.
+Authentication and secret management are delegated to **Sigilforge**.
 
-### Auth Reference Format
+Providers will request tokens via a client library:
 
-Providers reference credentials using URIs:
+- `get_token(service, account_alias) -> AccessToken`
+- `ensure_access_token(service, account_alias) -> AccessToken`
 
-```
-auth://spotify/default
-auth://gmail/work
-auth://reddit/personal
-auth://microsoft/main
-```
+`service` is a symbolic name like:
 
-### Integration Pattern
+- `gmail`
+- `outlook`
+- `spotify`
+- `youtube`
+- `reddit`
+- `msgraph`
 
-```rust
-// In a provider implementation
-async fn get_client(&self, auth_ref: &str) -> Result<ApiClient> {
-    // Request token from Sigilforge
-    let token = sigilforge_client::get_token(auth_ref).await?;
+`account_alias` distinguishes multiple accounts for the same service,
+e.g. `personal`, `work`, `lab`.
 
-    // Use token to create authenticated client
-    Ok(ApiClient::with_token(token))
-}
-```
+Sigilforge handles storage, refresh, and flows; Scryforge only handles
+HTTP/API calls using the provided tokens.
 
-### Sigilforge Responsibilities
+## Workspace Layout (Suggested)
 
-- Store encrypted credentials
-- Handle OAuth flows (redirect URI, PKCE)
-- Automatic token refresh
-- Multi-account support per service
+A possible Rust workspace layout for Scryforge:
 
-Scryforge assumes Sigilforge is running and accessible. If Sigilforge is unavailable, providers requiring auth will report a degraded state.
+- `scryforge-daemon/`
+  - Daemon binary crate
+- `scryforge-tui/`
+  - TUI binary crate
+- `fusabi-streams-core/`
+  - Reusable model + traits for streams/items/capabilities
+- `fusabi-tui-core/`
+  - Reusable TUI scaffolding for Fusabi-aware apps
+- `fusabi-tui-widgets/`
+  - Shared TUI widgets (stream list, item list, preview)
+- `providers/`
+  - `provider-email-imap/`
+  - `provider-rss/`
+  - `provider-spotify/`
+  - `provider-youtube/`
+  - `provider-reddit/`
+  - `provider-bookmarks/`
+  - `provider-msgraph/`
 
-## Plugin Model
+Additional documentation is kept in `docs/`.
 
-### Phase 1: In-Process Providers
+## Integration with Fusabi
 
-Initially, providers are Rust crates compiled into the daemon:
+Scryforge should help grow the Fusabi ecosystem:
 
-```rust
-// In scryforge-daemon
-use provider_email_imap::ImapProvider;
-use provider_rss::RssProvider;
+- **Daemon plugins**:
+  - Implemented in Rust and/or Fusabi
+  - Compiled to `.fzb` for performance where appropriate
 
-fn register_providers(registry: &mut ProviderRegistry) {
-    registry.register(ImapProvider::new());
-    registry.register(RssProvider::new());
-}
-```
+- **Client plugins**:
+  - Fusabi `.fsx` scripts loaded by the TUI to:
+    - Define new views and derived streams
+    - Add commands and keybindings
+    - Implement custom filters/slices
 
-### Phase 2: Fusabi Plugins (.fzb)
+- **Fusabi community packages**:
+  - `fusabi-streams-core` (types & traits)
+  - `fusabi-tui-core` and `fusabi-tui-widgets`
+  - Future: provider-specific `fusabi-*` packages wrapping particular APIs
 
-Future iterations will support dynamic loading via Fusabi:
-
-- Providers compiled to `.fzb` format
-- Hot-reload capability
-- Plugin manifest with capability declarations
-- Sandboxed execution
-
-### Phase 3: Scripted Providers (.fsx)
-
-For simpler providers or user customization:
-
-- Fusabi scripting for lightweight providers
-- User-defined transformations
-- Custom aggregations
-
-## Data Flow
-
-```
-┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-│   External   │     │   Provider   │     │    Cache     │
-│   Service    │◄───►│   (plugin)   │◄───►│   (SQLite)   │
-└──────────────┘     └──────────────┘     └──────────────┘
-                            │
-                            ▼
-                     ┌──────────────┐
-                     │    Daemon    │
-                     │   (hub)      │
-                     └──────────────┘
-                            │
-                            ▼ (JSON-RPC)
-                     ┌──────────────┐
-                     │     TUI      │
-                     └──────────────┘
-```
-
-1. **Sync**: Daemon periodically triggers providers to fetch from external services
-2. **Cache**: Data is cached locally for fast access and offline support
-3. **Serve**: TUI requests data from daemon, which serves from cache
-4. **Actions**: User actions flow back through daemon to providers
-
-## Configuration
-
-Configuration is stored in `$XDG_CONFIG_HOME/scryforge/`:
-
-```
-scryforge/
-├── config.toml           # Main configuration
-├── providers/            # Per-provider configuration
-│   ├── email-imap.toml
-│   ├── rss.toml
-│   └── spotify.toml
-└── themes/               # TUI themes
-    └── default.toml
-```
-
-### Example `config.toml`
-
-```toml
-[daemon]
-socket_path = "/run/user/1000/scryforge/daemon.sock"
-sync_interval_secs = 300
-
-[sigilforge]
-socket_path = "/run/user/1000/sigilforge/daemon.sock"
-
-[providers]
-enabled = ["email-imap", "rss", "spotify", "youtube", "reddit"]
-
-[tui]
-theme = "default"
-```
-
-## Future Considerations
-
-### Scarab Integration
-
-Scarab (AI/agent layer) may interact with Scryforge for:
-
-- Natural language queries ("show me unread emails about the project")
-- Automated actions based on content analysis
-- Cross-stream intelligence
-
-Integration would be via the same daemon API, with Scarab as another client.
-
-### Write Operations
-
-Phase 4+ may add limited write capabilities:
-
-- Playlist management (add/remove/reorder)
-- Bookmark operations
-- Email actions (archive, mark read)
-- Task completion (MS To Do)
-
-These will be exposed as additional `Action` types and require provider support.
+Scryforge serves as a flagship implementation of "Fusabi as an application
+extension and plugin language."
