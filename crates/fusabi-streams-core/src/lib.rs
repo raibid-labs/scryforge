@@ -9,6 +9,17 @@
 //! - [`Item`] - An entry within a stream (email, article, video, track, etc.)
 //! - [`Action`] - Operations that can be performed on items
 //! - Provider capability traits: [`HasFeeds`], [`HasCollections`], [`HasSavedItems`], [`HasCommunities`]
+//!
+//! ## Authentication
+//!
+//! Providers that require OAuth tokens can use the `TokenFetcher` trait from
+//! `scryforge-sigilforge-client` to fetch credentials from the Sigilforge daemon.
+//! Enable the `sigilforge` feature to access authentication utilities.
+//!
+//! ```toml
+//! [dependencies]
+//! fusabi-streams-core = { version = "0.1", features = ["sigilforge"] }
+//! ```
 
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
@@ -442,6 +453,45 @@ pub trait HasCommunities: Provider {
 }
 
 // ============================================================================
+// Authentication Support (Optional)
+// ============================================================================
+
+#[cfg(feature = "sigilforge")]
+pub mod auth {
+    //! Authentication utilities for providers that need OAuth tokens.
+    //!
+    //! This module re-exports types from `scryforge-sigilforge-client` to make it
+    //! easier for providers to request authentication tokens.
+    //!
+    //! # Example
+    //!
+    //! ```no_run
+    //! use fusabi_streams_core::auth::{TokenFetcher, MockTokenFetcher};
+    //! use std::sync::Arc;
+    //!
+    //! struct MyProvider {
+    //!     token_fetcher: Arc<dyn TokenFetcher>,
+    //! }
+    //!
+    //! impl MyProvider {
+    //!     pub fn new(token_fetcher: Arc<dyn TokenFetcher>) -> Self {
+    //!         Self { token_fetcher }
+    //!     }
+    //!
+    //!     pub async fn make_api_call(&self) -> Result<(), Box<dyn std::error::Error>> {
+    //!         let token = self.token_fetcher.fetch_token("spotify", "personal").await?;
+    //!         // Use token for API calls...
+    //!         Ok(())
+    //!     }
+    //! }
+    //! ```
+
+    pub use scryforge_sigilforge_client::{
+        default_socket_path, MockTokenFetcher, SigilforgeClient, SigilforgeError, TokenFetcher,
+    };
+}
+
+// ============================================================================
 // Re-exports
 // ============================================================================
 
@@ -452,4 +502,7 @@ pub mod prelude {
         ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth, Result,
         SavedItemsOptions, Stream, StreamError, StreamId, StreamType, SyncResult,
     };
+
+    #[cfg(feature = "sigilforge")]
+    pub use crate::auth;
 }

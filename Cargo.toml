@@ -5,6 +5,7 @@ members = [
     "crates/fusabi-tui-core",
     "crates/fusabi-tui-widgets",
     "scryforge-daemon",
+    "scryforge-sigilforge-client",
     "scryforge-tui",
     # Provider crates:
     "providers/provider-dummy",
@@ -57,3 +58,4 @@ uuid = { version = "1.10", features = ["v4", "serde"] }
 fusabi-streams-core = { path = "crates/fusabi-streams-core" }
 fusabi-tui-core = { path = "crates/fusabi-tui-core" }
 fusabi-tui-widgets = { path = "crates/fusabi-tui-widgets" }
+scryforge-sigilforge-client = { path = "scryforge-sigilforge-client" }
