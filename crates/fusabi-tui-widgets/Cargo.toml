@@ -11,3 +11,7 @@ description = "Reusable TUI widgets for Fusabi applications (stream list, item l
 fusabi-streams-core.workspace = true
 fusabi-tui-core.workspace = true
 ratatui.workspace = true
+
+[dev-dependencies]
+uuid.workspace = true
+chrono.workspace = true

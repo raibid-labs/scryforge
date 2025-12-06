@@ -257,3 +257,234 @@ impl ListState {
 pub mod prelude {
     pub use crate::{poll_event, AppEvent, AppState, FocusedPane, ListState, TerminalWrapper};
 }
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ListState Tests
+    #[test]
+    fn test_list_state_new() {
+        let state = ListState::new(5);
+        assert_eq!(state.selected, Some(0));
+        assert_eq!(state.len, 5);
+        assert_eq!(state.offset, 0);
+    }
+
+    #[test]
+    fn test_list_state_new_empty() {
+        let state = ListState::new(0);
+        assert_eq!(state.selected, None);
+        assert_eq!(state.len, 0);
+    }
+
+    #[test]
+    fn test_list_state_select_next() {
+        let mut state = ListState::new(3);
+        assert_eq!(state.selected, Some(0));
+
+        state.select_next();
+        assert_eq!(state.selected, Some(1));
+
+        state.select_next();
+        assert_eq!(state.selected, Some(2));
+    }
+
+    #[test]
+    fn test_list_state_select_next_wraps() {
+        let mut state = ListState::new(3);
+        state.selected = Some(2);
+        state.select_next();
+        assert_eq!(state.selected, Some(0)); // Should wrap to beginning
+    }
+
+    #[test]
+    fn test_list_state_select_next_empty_list() {
+        let mut state = ListState::new(0);
+        state.select_next();
+        assert_eq!(state.selected, None); // Should remain None
+    }
+
+    #[test]
+    fn test_list_state_select_prev() {
+        let mut state = ListState::new(3);
+        state.selected = Some(2);
+
+        state.select_prev();
+        assert_eq!(state.selected, Some(1));
+
+        state.select_prev();
+        assert_eq!(state.selected, Some(0));
+    }
+
+    #[test]
+    fn test_list_state_select_prev_wraps() {
+        let mut state = ListState::new(3);
+        state.selected = Some(0);
+        state.select_prev();
+        assert_eq!(state.selected, Some(2)); // Should wrap to end
+    }
+
+    #[test]
+    fn test_list_state_select_prev_empty_list() {
+        let mut state = ListState::new(0);
+        state.select_prev();
+        assert_eq!(state.selected, None); // Should remain None
+    }
+
+    #[test]
+    fn test_list_state_select_first() {
+        let mut state = ListState::new(5);
+        state.selected = Some(3);
+
+        state.select_first();
+        assert_eq!(state.selected, Some(0));
+    }
+
+    #[test]
+    fn test_list_state_select_first_empty_list() {
+        let mut state = ListState::new(0);
+        state.select_first();
+        assert_eq!(state.selected, None);
+    }
+
+    #[test]
+    fn test_list_state_select_last() {
+        let mut state = ListState::new(5);
+        state.selected = Some(0);
+
+        state.select_last();
+        assert_eq!(state.selected, Some(4));
+    }
+
+    #[test]
+    fn test_list_state_select_last_empty_list() {
+        let mut state = ListState::new(0);
+        state.select_last();
+        assert_eq!(state.selected, None);
+    }
+
+    #[test]
+    fn test_list_state_update_len_shrink() {
+        let mut state = ListState::new(5);
+        state.selected = Some(4);
+
+        state.update_len(3);
+        assert_eq!(state.selected, Some(2)); // Should clamp to last valid index
+        assert_eq!(state.len, 3);
+    }
+
+    #[test]
+    fn test_list_state_update_len_grow() {
+        let mut state = ListState::new(3);
+        state.selected = Some(1);
+
+        state.update_len(5);
+        assert_eq!(state.selected, Some(1)); // Should keep current selection
+        assert_eq!(state.len, 5);
+    }
+
+    #[test]
+    fn test_list_state_update_len_to_empty() {
+        let mut state = ListState::new(5);
+        state.selected = Some(2);
+
+        state.update_len(0);
+        assert_eq!(state.selected, None); // Should clear selection
+        assert_eq!(state.len, 0);
+    }
+
+    #[test]
+    fn test_list_state_update_len_from_empty() {
+        let mut state = ListState::new(0);
+        assert_eq!(state.selected, None);
+
+        state.update_len(3);
+        assert_eq!(state.selected, Some(0)); // Should select first item
+        assert_eq!(state.len, 3);
+    }
+
+    #[test]
+    fn test_list_state_default() {
+        let state = ListState::default();
+        assert_eq!(state.selected, None);
+        assert_eq!(state.len, 0);
+        assert_eq!(state.offset, 0);
+    }
+
+    // FocusedPane Tests
+    #[test]
+    fn test_focused_pane_default() {
+        let pane = FocusedPane::default();
+        assert_eq!(pane, FocusedPane::StreamList);
+    }
+
+    #[test]
+    fn test_focused_pane_next() {
+        assert_eq!(FocusedPane::StreamList.next(), FocusedPane::ItemList);
+        assert_eq!(FocusedPane::ItemList.next(), FocusedPane::Preview);
+        assert_eq!(FocusedPane::Preview.next(), FocusedPane::StreamList);
+        assert_eq!(FocusedPane::Omnibar.next(), FocusedPane::StreamList);
+    }
+
+    #[test]
+    fn test_focused_pane_prev() {
+        assert_eq!(FocusedPane::StreamList.prev(), FocusedPane::Preview);
+        assert_eq!(FocusedPane::ItemList.prev(), FocusedPane::StreamList);
+        assert_eq!(FocusedPane::Preview.prev(), FocusedPane::ItemList);
+        assert_eq!(FocusedPane::Omnibar.prev(), FocusedPane::StreamList);
+    }
+
+    #[test]
+    fn test_focused_pane_navigation_cycle() {
+        let mut pane = FocusedPane::StreamList;
+
+        // Next cycle
+        pane = pane.next();
+        assert_eq!(pane, FocusedPane::ItemList);
+        pane = pane.next();
+        assert_eq!(pane, FocusedPane::Preview);
+        pane = pane.next();
+        assert_eq!(pane, FocusedPane::StreamList); // Full cycle
+
+        // Prev cycle
+        pane = pane.prev();
+        assert_eq!(pane, FocusedPane::Preview);
+        pane = pane.prev();
+        assert_eq!(pane, FocusedPane::ItemList);
+        pane = pane.prev();
+        assert_eq!(pane, FocusedPane::StreamList); // Full cycle back
+    }
+
+    // AppEvent Tests
+    #[test]
+    fn test_app_event_equality() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let key_event = KeyEvent::new(KeyCode::Char('a'), KeyModifiers::NONE);
+        let event1 = AppEvent::Key(key_event);
+        let event2 = AppEvent::Key(key_event);
+        assert_eq!(event1, event2);
+
+        let resize1 = AppEvent::Resize(80, 24);
+        let resize2 = AppEvent::Resize(80, 24);
+        assert_eq!(resize1, resize2);
+
+        assert_eq!(AppEvent::Tick, AppEvent::Tick);
+        assert_eq!(AppEvent::Quit, AppEvent::Quit);
+    }
+
+    #[test]
+    fn test_app_event_clone() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+        let key_event = KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE);
+        let event = AppEvent::Key(key_event);
+        let cloned = event.clone();
+        assert_eq!(event, cloned);
+    }
+}
