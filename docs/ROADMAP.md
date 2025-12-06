@@ -1,133 +1,223 @@
 # Scryforge Roadmap
 
-This roadmap is intentionally high-level. It outlines phases for turning
-Scryforge into a usable, extensible information console.
+This document outlines the phased development plan for Scryforge.
 
-## Phase 0 — Workspace & Skeleton
+## Phase 0: Scaffolding and Dummy Provider
 
-- Create Rust workspace with:
-  - `scryforge-daemon`
-  - `scryforge-tui`
-  - `fusabi-streams-core`
-  - `fusabi-tui-core`
-  - `fusabi-tui-widgets`
-  - `providers/` directory
-- Implement initial `Stream` and `Item` types in `fusabi-streams-core`:
-  - Basic metadata fields
-  - Capability marker traits (`HasFeeds`, `HasCollections`, etc.)
-- Implement skeleton TUI that:
-  - Displays a placeholder list of streams and items from a dummy provider
-  - Handles basic keybindings and quitting
-- Implement skeleton daemon that:
-  - Serves a hard-coded set of streams/items over a simple local API
+**Goal**: Establish project structure and prove the architecture with a minimal implementation.
 
-## Phase 1 — Core TUI + First Real Providers
+### Deliverables
 
-Focus: email + RSS, solid core UX.
+- [x] Workspace layout with all crate stubs
+- [x] Core types defined in `fusabi-streams-core`
+- [x] Documentation (README, ARCHITECTURE, ROADMAP, PROVIDERS)
+- [ ] Dummy/mock provider that returns fake data
+- [ ] Basic daemon with in-memory state
+- [ ] Daemon API skeleton (streams.list, items.list)
+- [ ] Minimal TUI that connects to daemon and displays dummy streams
 
-- Implement IMAP-based email provider:
-  - Configurable accounts (e.g. Gmail, Outlook/IMAP)
-  - `HasFeeds` for folders (INBOX, Archive, etc.)
-  - Items for messages (subject, from, snippet, dates, flags as metadata)
-  - Read-only: listing and viewing messages; no send/compose.
-- Implement RSS provider:
-  - Feeds configured via a simple config file
-  - `HasFeeds` implementation (per-feed streams)
-  - Items for articles (title, link, summary, published time)
-- Integrate with Sigilforge for accounts that need OAuth (or configure
-  IMAP passwords via Sigilforge if desired).
-- Upgrade TUI:
-  - Sidebar for streams
-  - Main list for items
-  - Preview pane for content (e.g., plain text/HTML-stripped email, RSS item)
+### Success Criteria
 
-Deliverable: Scryforge can act as a basic multi-account email + RSS reader.
+- `cargo build` succeeds for all workspace members
+- TUI can display a list of dummy streams from the daemon
+- Architecture is validated end-to-end
 
-## Phase 2 — Productivity & Media Providers
+---
 
-Focus: expanding coverage to tasks, calendar, media and social.
+## Phase 1: IMAP Email + RSS + Basic TUI
 
-- Microsoft Graph provider:
-  - `HasTasks` → Microsoft To Do
-  - `HasCalendar` → basic views like Today, This Week
-- Spotify provider:
-  - `HasCollections` → playlists
-  - `HasSavedItems` → liked songs
-- YouTube provider:
-  - `HasFeeds` → subscriptions feed
-  - `HasCollections` → playlists
-  - `HasSavedItems` → watch-later
-- Reddit provider:
-  - `HasFeeds` → home and subreddits
-  - `HasSavedItems` → saved posts and comments
-  - `HasCommunities` → subreddit subscriptions
-- Bookmarks provider:
-  - Local bookmarks DB OR integration with an existing CLI like `buku`
-  - `HasCollections` and `HasSavedItems`
+**Goal**: First real providers with a functional TUI.
 
-TUI improvements:
+### Deliverables
 
-- Basic omnibar for filtering within current stream
-- Quick switching between streams and providers
-- Per-stream configuration for visible columns and sort order
+- [ ] `provider-email-imap` crate
+  - Connect via IMAP (supports Gmail, Outlook, generic IMAP)
+  - List mailboxes as streams
+  - Fetch message headers and plain text bodies
+  - Auth via Sigilforge (`auth://imap/account`)
+- [ ] `provider-rss` crate
+  - Parse RSS and Atom feeds
+  - Support OPML import for feed list
+  - Fetch and cache feed items
+- [ ] TUI enhancements
+  - Stream sidebar with provider grouping
+  - Item list with sorting (date, unread status)
+  - Preview pane for email/article content
+  - Basic keyboard navigation (vim-style)
+- [ ] Daemon improvements
+  - Periodic sync scheduling
+  - SQLite cache for items
+  - Provider health monitoring
 
-## Phase 3 — Unified Views & Cross-Stream Features
+### Success Criteria
 
-Focus: make Scryforge more than the sum of its parts.
+- Can view Gmail inbox and RSS feeds in the TUI
+- Items persist across daemon restarts
+- Responsive navigation with 1000+ items
 
-- Unified views:
-  - `Saved`:
-    - Aggregates all `HasSavedItems` providers
-    - E.g., Reddit saved, Medium bookmarks via RSS + tags, YouTube watch-later, Spotify liked, bookmarks
-  - `Playlists`:
-    - Aggregates all `HasCollections` playlist-like providers
-    - E.g., Spotify playlists, YouTube playlists, playlist-style bookmark folders
-  - `Feeds`:
-    - Aggregates all `HasFeeds` providers
-    - E.g., RSS, email inboxes, YouTube subscriptions, Medium feeds
-- Local metadata:
-  - Tagging items across providers
-  - Pinning
-  - Local notes attached to items
-- TUI enhancements:
-  - Persistent layouts and workspaces
-  - Saved filters
+---
 
-## Phase 4 — Optional Write Operations
+## Phase 2: Expanded Providers
 
-Only after read-only flows are mature:
+**Goal**: Add remaining MVP providers for comprehensive information access.
 
-- Playlist editing:
-  - Add/remove tracks/videos from playlists (Spotify, YouTube)
-- Bookmark management:
-  - Create/remove bookmarks and folders in the bookmarks provider
-- Optional "mark read" propagation to email providers (via IMAP flags)
-- Optional integration with Reddit, YouTube, etc. for actions like:
-  - Mark watched
-  - Star/like (carefully scoped)
+### Deliverables
 
-These features must be added with attention to:
+- [ ] `provider-mstodo` crate
+  - Microsoft To Do tasks (via MS Graph)
+  - Calendar events (via MS Graph)
+  - Read-only: view tasks and upcoming events
+  - Auth via Sigilforge (`auth://microsoft/account`)
+- [ ] `provider-spotify` crate
+  - List playlists as collections
+  - Liked tracks as saved items
+  - Track metadata and album art URLs
+  - Auth via Sigilforge (`auth://spotify/account`)
+- [ ] `provider-youtube` crate
+  - Subscription feed (HasFeeds)
+  - Playlists (HasCollections)
+  - Watch Later (HasSavedItems)
+  - Auth via Sigilforge (`auth://youtube/account`)
+- [ ] `provider-reddit` crate
+  - Home feed and subreddit feeds (HasFeeds)
+  - Saved posts (HasSavedItems)
+  - Subreddit subscriptions (HasCommunities)
+  - Auth via Sigilforge (`auth://reddit/account`)
+- [ ] `provider-bookmarks` crate
+  - Local bookmark storage (JSON/SQLite)
+  - Optional buku integration
+  - Bookmark folders as collections
 
-- Clear UI affordances and confirmations
-- Idempotency and error handling
-- Minimal OAuth scopes
+### Success Criteria
 
-## Phase 5 — Agents & Intelligent Views
+- All listed providers functional in read-only mode
+- Can switch between different provider types seamlessly
+- Auth flow works via Sigilforge for all OAuth providers
 
-Once the core product is stable:
+---
 
-- Scarab integration:
-  - Allow Scarab agents to use Scryforge’s daemon API for read operations
-  - Expose derived views as structured data to agents
-- Intelligent views:
-  - “Today” dashboard:
-    - New emails, tasks due today, calendar, key feeds
-  - “Deep work” view:
-    - Only items tagged or classified as high priority
-- AI-powered features (optional):
-  - Summarize inbox or feeds
-  - Cluster and deduplicate links across providers
-  - Suggest tasks based on emails or save actions
+## Phase 3: Unified Views and Cross-Stream Features
 
-This phase is intentionally open-ended and should be driven by experience
-from earlier phases and user feedback.
+**Goal**: Provide aggregate views that span multiple providers.
+
+### Deliverables
+
+- [ ] Unified "All Feeds" view
+  - Combines RSS, Reddit home, YouTube subscriptions, email (as timeline)
+  - Sorted by date, filterable by provider
+- [ ] Unified "Saved Items" view
+  - Aggregates: Reddit saved, YouTube watch-later, Spotify liked, bookmarks
+  - Cross-provider search
+- [ ] Unified "Collections" view
+  - Lists all playlists, bookmark folders, email labels
+  - Navigate into any collection
+- [ ] Enhanced search
+  - Full-text search across all cached items
+  - Provider-specific search (delegated to API where available)
+- [ ] Omnibar improvements
+  - Quick stream switching
+  - Inline search
+  - Command execution
+
+### Success Criteria
+
+- Can answer "what have I saved recently?" across all services
+- Search returns results from all providers
+- Omnibar enables rapid navigation without mouse
+
+---
+
+## Phase 4: Limited Write Operations
+
+**Goal**: Enable "library" operations that manage content organization.
+
+### Deliverables
+
+- [ ] Playlist operations
+  - Add/remove items from Spotify/YouTube playlists
+  - Reorder items
+- [ ] Bookmark operations
+  - Create/edit/delete bookmarks
+  - Organize into folders
+- [ ] Email operations
+  - Mark read/unread
+  - Archive
+  - Move between folders
+- [ ] Task operations
+  - Mark MS To Do tasks complete
+  - Maybe: create simple tasks
+- [ ] Save/unsave operations
+  - Reddit save/unsave
+  - YouTube add to/remove from watch-later
+
+### Success Criteria
+
+- Write operations succeed and reflect in external services
+- Optimistic updates in TUI with error handling
+- No data loss scenarios
+
+---
+
+## Phase 5+: Advanced Features
+
+**Goal**: Extended capabilities and ecosystem integration.
+
+### Potential Features
+
+- [ ] **Scarab Integration**
+  - Natural language queries
+  - AI-assisted categorization
+  - Smart summaries of feed content
+- [ ] **Fusabi Plugin System**
+  - Dynamic provider loading (.fzb)
+  - User-defined providers via scripting (.fsx)
+  - Plugin marketplace integration
+- [ ] **Notification System**
+  - Desktop notifications for new items
+  - Priority filtering
+  - Quiet hours
+- [ ] **Offline Mode**
+  - Full offline access to cached content
+  - Queue actions for sync when online
+- [ ] **Multi-device Sync**
+  - Sync read status across devices
+  - Via cloud storage or self-hosted sync
+- [ ] **Rich Content**
+  - Inline image viewing (sixel/kitty protocol)
+  - Video thumbnails
+  - Audio playback integration
+
+---
+
+## Non-Goals (Explicit Exclusions)
+
+The following are explicitly out of scope for Scryforge:
+
+- **Full email client**: No composer, no complex HTML rendering, no attachment handling
+- **Social posting**: No creating Reddit posts, no tweeting, no publishing
+- **Real-time chat**: Not a Slack/Discord/Matrix client
+- **Media playback**: Links to external players, not embedded playback
+- **GUI client**: Terminal-only for now
+
+---
+
+## Dependencies on Other Projects
+
+| Project | Dependency | Notes |
+|---------|------------|-------|
+| Sigilforge | Required for OAuth providers | Must be running for auth |
+| Fusabi | Required for plugin system | Phase 5+ for dynamic plugins |
+| Scarab | Optional | AI features in Phase 5+ |
+
+---
+
+## Release Milestones
+
+| Version | Phase | Key Features |
+|---------|-------|--------------|
+| 0.1.0 | 0 | Scaffolding, dummy provider, basic daemon/TUI |
+| 0.2.0 | 1 | IMAP + RSS + functional TUI |
+| 0.3.0 | 2 | All MVP providers |
+| 0.4.0 | 3 | Unified views, search |
+| 0.5.0 | 4 | Write operations |
+| 1.0.0 | 5 | Stable API, plugin system, production-ready |
