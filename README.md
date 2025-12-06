@@ -167,12 +167,49 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development roadmap. Current
 4. Connect TUI to daemon
 5. Add configuration loading
 
+### Testing
+
+The project includes comprehensive tests for TUI widgets and core state management:
+
+```bash
+# Run all tests with the recommended target directory override
+CARGO_TARGET_DIR=./target cargo test --workspace
+
+# Run tests for a specific crate
+CARGO_TARGET_DIR=./target cargo test -p fusabi-tui-core
+CARGO_TARGET_DIR=./target cargo test -p fusabi-tui-widgets
+
+# Run tests with output
+CARGO_TARGET_DIR=./target cargo test --workspace -- --nocapture
+
+# Run a specific test
+CARGO_TARGET_DIR=./target cargo test test_list_state_new
+```
+
+**Note:** Using `CARGO_TARGET_DIR=./target` ensures consistent build artifact location and avoids permission issues in CI environments.
+
+### Linting and Formatting
+
+```bash
+# Check formatting
+cargo fmt --all -- --check
+
+# Format code
+cargo fmt --all
+
+# Run clippy (linter)
+CARGO_TARGET_DIR=./target cargo clippy --workspace -- -D warnings
+
+# Auto-fix clippy warnings (when safe)
+CARGO_TARGET_DIR=./target cargo clippy --workspace --fix --allow-dirty
+```
+
 ### Contributing
 
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
-4. Run tests: `cargo test`
+4. Run tests: `CARGO_TARGET_DIR=./target cargo test --workspace`
 5. Run lints: `cargo clippy` and `cargo fmt`
 6. Submit a pull request
 

@@ -59,22 +59,44 @@
 
 use anyhow::Result;
 use crossterm::event::KeyCode;
-use fusabi_streams_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
+use fusabi_streams_core::{Item, Stream};
 use fusabi_tui_core::prelude::*;
 use fusabi_tui_widgets::prelude::*;
 use ratatui::layout::{Constraint, Direction, Layout};
-use std::collections::HashMap;
+use tokio::sync::mpsc;
+
+mod daemon_client;
+use daemon_client::{Command, Message, get_daemon_url, spawn_client_task};
 
 fn main() -> Result<()> {
-    // Initialize logging (to file, not stdout, since we're using the terminal)
-    // TODO: Set up file-based logging
-    // For now, just suppress output
+    // Initialize logging to file
+    // TODO: Set up file-based logging properly
+    // For now, we suppress output to avoid interfering with TUI
+
+    // Create tokio runtime for async operations
+    let rt = tokio::runtime::Runtime::new()?;
+
+    // Run the TUI in the runtime
+    rt.block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
+    // Set up daemon client channels
+    let (cmd_tx, cmd_rx) = mpsc::unbounded_channel();
+    let (msg_tx, mut msg_rx) = mpsc::unbounded_channel();
+
+    // Spawn the daemon client task
+    let daemon_url = get_daemon_url();
+    let _client_handle = spawn_client_task(daemon_url, cmd_rx, msg_tx);
 
     // Initialize terminal
     let mut terminal = TerminalWrapper::new()?;
 
-    // Create app state with dummy data for now
-    let mut app = App::new_with_dummy_data();
+    // Create app state (starts empty, will be populated from daemon)
+    let mut app = App::new(cmd_tx.clone());
+
+    // Request initial data from daemon
+    let _ = cmd_tx.send(Command::FetchStreams);
 
     // Main event loop
     loop {
@@ -83,7 +105,12 @@ fn main() -> Result<()> {
             app.render(frame);
         })?;
 
-        // Handle events
+        // Handle daemon messages (non-blocking)
+        while let Ok(msg) = msg_rx.try_recv() {
+            app.handle_daemon_message(msg);
+        }
+
+        // Handle UI events
         if let Some(event) = poll_event(std::time::Duration::from_millis(100))? {
             if !app.handle_event(event) {
                 break;
@@ -94,6 +121,9 @@ fn main() -> Result<()> {
             break;
         }
     }
+
+    // Send shutdown command to daemon client
+    let _ = cmd_tx.send(Command::Shutdown);
 
     // Cleanup handled by TerminalWrapper::Drop
     Ok(())
@@ -114,158 +144,67 @@ struct App {
     quit: bool,
     theme: Theme,
     status_message: String,
+    cmd_tx: mpsc::UnboundedSender<Command>,
+    daemon_connected: bool,
 }
 
 impl App {
-    fn new_with_dummy_data() -> Self {
-        // Create dummy streams for demonstration
-        let streams = vec![
-            Stream {
-                id: StreamId::new("email", "inbox", "gmail"),
-                name: "Gmail Inbox".to_string(),
-                provider_id: "email-imap".to_string(),
-                stream_type: StreamType::Feed,
-                icon: Some("📧".to_string()),
-                unread_count: Some(5),
-                total_count: Some(150),
-                last_updated: None,
-                metadata: HashMap::new(),
-            },
-            Stream {
-                id: StreamId::new("rss", "feed", "hackernews"),
-                name: "Hacker News".to_string(),
-                provider_id: "rss".to_string(),
-                stream_type: StreamType::Feed,
-                icon: Some("📰".to_string()),
-                unread_count: Some(42),
-                total_count: Some(100),
-                last_updated: None,
-                metadata: HashMap::new(),
-            },
-            Stream {
-                id: StreamId::new("reddit", "home", "default"),
-                name: "Reddit Home".to_string(),
-                provider_id: "reddit".to_string(),
-                stream_type: StreamType::Feed,
-                icon: Some("🔴".to_string()),
-                unread_count: None,
-                total_count: None,
-                last_updated: None,
-                metadata: HashMap::new(),
-            },
-            Stream {
-                id: StreamId::new("spotify", "collection", "liked"),
-                name: "Liked Songs".to_string(),
-                provider_id: "spotify".to_string(),
-                stream_type: StreamType::SavedItems,
-                icon: Some("💚".to_string()),
-                unread_count: None,
-                total_count: Some(523),
-                last_updated: None,
-                metadata: HashMap::new(),
-            },
-        ];
-
-        // Create dummy items
-        let items = vec![
-            Item {
-                id: ItemId::new("email", "msg-001"),
-                stream_id: StreamId::new("email", "inbox", "gmail"),
-                title: "Meeting tomorrow at 10am".to_string(),
-                content: ItemContent::Email {
-                    subject: "Meeting tomorrow at 10am".to_string(),
-                    body_text: Some(
-                        "Hi,\n\nJust a reminder about our meeting tomorrow.\n\nBest,\nJohn"
-                            .to_string(),
-                    ),
-                    body_html: None,
-                    snippet: "Just a reminder about our meeting...".to_string(),
-                },
-                author: Some(fusabi_streams_core::Author {
-                    name: "John Doe".to_string(),
-                    email: Some("john@example.com".to_string()),
-                    url: None,
-                    avatar_url: None,
-                }),
-                published: Some(chrono::Utc::now()),
-                updated: None,
-                url: None,
-                thumbnail_url: None,
-                is_read: false,
-                is_saved: false,
-                tags: vec![],
-                metadata: HashMap::new(),
-            },
-            Item {
-                id: ItemId::new("email", "msg-002"),
-                stream_id: StreamId::new("email", "inbox", "gmail"),
-                title: "Your order has shipped".to_string(),
-                content: ItemContent::Email {
-                    subject: "Your order has shipped".to_string(),
-                    body_text: Some(
-                        "Your order #12345 has shipped and will arrive by Friday.".to_string(),
-                    ),
-                    body_html: None,
-                    snippet: "Your order #12345 has shipped...".to_string(),
-                },
-                author: Some(fusabi_streams_core::Author {
-                    name: "Shop Support".to_string(),
-                    email: Some("support@shop.com".to_string()),
-                    url: None,
-                    avatar_url: None,
-                }),
-                published: Some(chrono::Utc::now()),
-                updated: None,
-                url: None,
-                thumbnail_url: None,
-                is_read: true,
-                is_saved: false,
-                tags: vec![],
-                metadata: HashMap::new(),
-            },
-            Item {
-                id: ItemId::new("rss", "article-001"),
-                stream_id: StreamId::new("rss", "feed", "hackernews"),
-                title: "Show HN: A new Rust TUI framework".to_string(),
-                content: ItemContent::Article {
-                    summary: Some(
-                        "I've been working on a new TUI framework in Rust...".to_string(),
-                    ),
-                    full_content: None,
-                },
-                author: Some(fusabi_streams_core::Author {
-                    name: "rustdev".to_string(),
-                    email: None,
-                    url: None,
-                    avatar_url: None,
-                }),
-                published: Some(chrono::Utc::now()),
-                updated: None,
-                url: Some("https://news.ycombinator.com/item?id=123".to_string()),
-                thumbnail_url: None,
-                is_read: false,
-                is_saved: false,
-                tags: vec![],
-                metadata: HashMap::new(),
-            },
-        ];
-
-        let stream_count = streams.len();
-        let item_count = items.len();
-
+    fn new(cmd_tx: mpsc::UnboundedSender<Command>) -> Self {
         Self {
-            streams,
-            items,
-            stream_state: ListState::new(stream_count),
-            item_state: ListState::new(item_count),
+            streams: Vec::new(),
+            items: Vec::new(),
+            stream_state: ListState::new(0),
+            item_state: ListState::new(0),
             focused: FocusedPane::StreamList,
             omnibar_input: String::new(),
             omnibar_active: false,
             quit: false,
             theme: Theme::default(),
-            status_message: "Ready - Press ? for help".to_string(),
+            status_message: "Connecting to daemon...".to_string(),
+            cmd_tx,
+            daemon_connected: false,
         }
     }
+
+    fn handle_daemon_message(&mut self, msg: Message) {
+        match msg {
+            Message::Ready => {
+                self.daemon_connected = true;
+                self.status_message = "Connected to daemon - Press ? for help".to_string();
+            }
+            Message::StreamsLoaded(streams) => {
+                let count = streams.len();
+                self.streams = streams;
+                self.stream_state = ListState::new(count);
+                if count > 0 {
+                    self.stream_state.select_first();
+                    // Auto-fetch items for first stream
+                    if let Some(stream) = self.streams.first() {
+                        let _ = self.cmd_tx.send(Command::FetchItems(stream.id.as_str().to_string()));
+                    }
+                }
+                self.status_message = format!("Loaded {} streams", count);
+            }
+            Message::ItemsLoaded(items) => {
+                let count = items.len();
+                self.items = items;
+                self.item_state = ListState::new(count);
+                if count > 0 {
+                    self.item_state.select_first();
+                }
+                self.status_message = format!("Loaded {} items", count);
+            }
+            Message::Error(err) => {
+                self.status_message = format!("Error: {}", err);
+                self.daemon_connected = false;
+            }
+            Message::Disconnected => {
+                self.status_message = "Disconnected from daemon".to_string();
+                self.daemon_connected = false;
+            }
+        }
+    }
+
 
     fn render(&self, frame: &mut ratatui::Frame) {
         let size = frame.area();
@@ -312,7 +251,12 @@ impl App {
             .render(frame, main_chunks[1]);
 
         // Render status bar
-        StatusBarWidget::new(&self.status_message, "Dummy provider", &self.theme)
+        let connection_status = if self.daemon_connected {
+            "Connected"
+        } else {
+            "Disconnected"
+        };
+        StatusBarWidget::new(&self.status_message, connection_status, &self.theme)
             .render(frame, main_chunks[2]);
     }
 }
@@ -407,7 +351,14 @@ impl AppState for App {
 impl App {
     fn navigate_down(&mut self) {
         match self.focused {
-            FocusedPane::StreamList => self.stream_state.select_next(),
+            FocusedPane::StreamList => {
+                let old_selection = self.stream_state.selected;
+                self.stream_state.select_next();
+                // If stream changed, fetch items for new stream
+                if old_selection != self.stream_state.selected {
+                    self.fetch_items_for_selected_stream();
+                }
+            }
             FocusedPane::ItemList => self.item_state.select_next(),
             _ => {}
         }
@@ -415,7 +366,14 @@ impl App {
 
     fn navigate_up(&mut self) {
         match self.focused {
-            FocusedPane::StreamList => self.stream_state.select_prev(),
+            FocusedPane::StreamList => {
+                let old_selection = self.stream_state.selected;
+                self.stream_state.select_prev();
+                // If stream changed, fetch items for new stream
+                if old_selection != self.stream_state.selected {
+                    self.fetch_items_for_selected_stream();
+                }
+            }
             FocusedPane::ItemList => self.item_state.select_prev(),
             _ => {}
         }
@@ -423,7 +381,13 @@ impl App {
 
     fn navigate_first(&mut self) {
         match self.focused {
-            FocusedPane::StreamList => self.stream_state.select_first(),
+            FocusedPane::StreamList => {
+                let old_selection = self.stream_state.selected;
+                self.stream_state.select_first();
+                if old_selection != self.stream_state.selected {
+                    self.fetch_items_for_selected_stream();
+                }
+            }
             FocusedPane::ItemList => self.item_state.select_first(),
             _ => {}
         }
@@ -431,9 +395,24 @@ impl App {
 
     fn navigate_last(&mut self) {
         match self.focused {
-            FocusedPane::StreamList => self.stream_state.select_last(),
+            FocusedPane::StreamList => {
+                let old_selection = self.stream_state.selected;
+                self.stream_state.select_last();
+                if old_selection != self.stream_state.selected {
+                    self.fetch_items_for_selected_stream();
+                }
+            }
             FocusedPane::ItemList => self.item_state.select_last(),
             _ => {}
+        }
+    }
+
+    fn fetch_items_for_selected_stream(&mut self) {
+        if let Some(idx) = self.stream_state.selected {
+            if let Some(stream) = self.streams.get(idx) {
+                let _ = self.cmd_tx.send(Command::FetchItems(stream.id.as_str().to_string()));
+                self.status_message = format!("Loading items for {}...", stream.name);
+            }
         }
     }
 }
