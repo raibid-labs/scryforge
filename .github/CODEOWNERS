@@ -1,0 +1,25 @@
+# Scryforge Code Owners
+# These owners will be automatically requested for review when someone opens a pull request.
+
+# Default owners for everything in the repo
+* @raibid-labs
+
+# Core library crates
+/crates/fusabi-streams-core/ @raibid-labs
+/crates/fusabi-tui-core/ @raibid-labs
+/crates/fusabi-tui-widgets/ @raibid-labs
+
+# Main binaries
+/scryforge-daemon/ @raibid-labs
+/scryforge-tui/ @raibid-labs
+
+# Documentation
+/docs/ @raibid-labs
+*.md @raibid-labs
+
+# CI/CD and workflows
+/.github/ @raibid-labs
+
+# Cargo configuration
+Cargo.toml @raibid-labs
+Cargo.lock @raibid-labs

@@ -1,0 +1,242 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (skip publish steps)'
+        required: false
+        default: 'true'
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/v}
+          else
+            VERSION="0.0.0-dev"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            # Get previous tag
+            PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+            if [ -z "$PREV_TAG" ]; then
+              echo "First release"
+              CHANGELOG=$(git log --pretty=format:"- %s" --no-merges)
+            else
+              echo "Previous tag: $PREV_TAG"
+              CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s" --no-merges)
+            fi
+          else
+            CHANGELOG="Dry run release - no changelog generated"
+          fi
+
+          # Save to file for multiline output
+          echo "$CHANGELOG" > changelog.txt
+          echo "Generated changelog"
+
+      - name: Create Release
+        id: create_release
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ steps.version.outputs.version }}
+          body_path: changelog.txt
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, '-') }}
+
+  build-binaries:
+    name: Build Binary (${{ matrix.target }})
+    needs: create-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            binary_suffix: ''
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            binary_suffix: ''
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            binary_suffix: ''
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            binary_suffix: ''
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            binary_suffix: '.exe'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools
+
+      - name: Cache cargo registry
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-cargo-git-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build daemon
+        run: cargo build --release --target ${{ matrix.target }} --bin scryforge-daemon
+
+      - name: Build TUI
+        run: cargo build --release --target ${{ matrix.target }} --bin scryforge-tui
+
+      - name: Package binaries
+        shell: bash
+        run: |
+          VERSION=${{ needs.create-release.outputs.version }}
+          TARGET=${{ matrix.target }}
+          ARCHIVE_NAME="scryforge-${VERSION}-${TARGET}"
+
+          mkdir -p dist
+
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            cp target/${TARGET}/release/scryforge-daemon.exe dist/
+            cp target/${TARGET}/release/scryforge-tui.exe dist/
+            cd dist
+            7z a ../${ARCHIVE_NAME}.zip scryforge-daemon.exe scryforge-tui.exe
+            cd ..
+          else
+            cp target/${TARGET}/release/scryforge-daemon dist/
+            cp target/${TARGET}/release/scryforge-tui dist/
+            cd dist
+            tar czf ../${ARCHIVE_NAME}.tar.gz scryforge-daemon scryforge-tui
+            cd ..
+          fi
+
+      - name: Upload Release Asset
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./scryforge-${{ needs.create-release.outputs.version }}-${{ matrix.target }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          asset_name: scryforge-${{ needs.create-release.outputs.version }}-${{ matrix.target }}.${{ matrix.os == 'windows-latest' && 'zip' || 'tar.gz' }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload artifact (dry run)
+        if: inputs.dry_run || (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/'))
+        uses: actions/upload-artifact@v3
+        with:
+          name: scryforge-${{ needs.create-release.outputs.version }}-${{ matrix.target }}
+          path: ./scryforge-${{ needs.create-release.outputs.version }}-${{ matrix.target }}.*
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: create-release
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && !inputs.dry_run
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish fusabi-streams-core
+        run: |
+          cd crates/fusabi-streams-core
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+
+      - name: Wait for crates.io to update
+        run: sleep 10
+
+      - name: Publish fusabi-tui-core
+        run: |
+          cd crates/fusabi-tui-core
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+
+      - name: Wait for crates.io to update
+        run: sleep 10
+
+      - name: Publish fusabi-tui-widgets
+        run: |
+          cd crates/fusabi-tui-widgets
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+
+      - name: Wait for crates.io to update
+        run: sleep 10
+
+      - name: Publish scryforge-daemon
+        run: |
+          cd scryforge-daemon
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+
+      - name: Wait for crates.io to update
+        run: sleep 10
+
+      - name: Publish scryforge-tui
+        run: |
+          cd scryforge-tui
+          cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} || true
+
+  dry-run-summary:
+    name: Dry Run Summary
+    needs: [create-release, build-binaries]
+    runs-on: ubuntu-latest
+    if: inputs.dry_run || (github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/'))
+    steps:
+      - name: Summary
+        run: |
+          echo "## Dry Run Completed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Version: ${{ needs.create-release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "This was a dry run. No release was published." >> $GITHUB_STEP_SUMMARY
+          echo "Artifacts were uploaded and can be downloaded from the Actions tab." >> $GITHUB_STEP_SUMMARY
