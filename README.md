@@ -1,8 +1,11 @@
 # Scryforge
 
+[![CI](https://github.com/raibid-labs/scryforge/workflows/CI/badge.svg)](https://github.com/raibid-labs/scryforge/actions)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+
 **A Fusabi-powered, pluggable TUI information rolodex for the terminal.**
 
-> **Status**: Phase 0 complete — scaffolding and architecture in place. The TUI renders with dummy data; daemon starts but has no API yet. See [NEXT_STEPS.md](NEXT_STEPS.md) for immediate work items.
+> **Status**: Phase 0 complete — scaffolding and architecture in place. The TUI renders with dummy data; daemon starts but has no API yet. See [docs/ROADMAP.md](docs/ROADMAP.md) for development phases.
 
 Scryforge unifies multiple read-mostly information streams (email, RSS, playlists, saved items, bookmarks, and more) into a single terminal interface backed by a local daemon. It is part of the **raibid-labs ecosystem** (Scarab, Hibana, Tolaria, Phage, Fusabi).
 
@@ -156,14 +159,24 @@ cargo run --bin scryforge-tui
 
 ## Development
 
-See [NEXT_STEPS.md](NEXT_STEPS.md) for detailed next tasks. Summary:
+See [docs/ROADMAP.md](docs/ROADMAP.md) for the full development roadmap. Current priorities:
 
-1. **Task 1**: Implement daemon API types
-2. **Task 2**: Create a dummy provider
-3. **Task 3**: Wire daemon to provider registry
-4. **Task 4**: Implement JSON-RPC API server
-5. **Task 5**: Connect TUI to daemon
-6. **Task 6**: Implement RSS provider (first real provider)
+1. Implement daemon API types and JSON-RPC server
+2. Create provider registry and caching layer
+3. Implement first real provider (RSS)
+4. Connect TUI to daemon
+5. Add configuration loading
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Run tests: `cargo test`
+5. Run lints: `cargo clippy` and `cargo fmt`
+6. Submit a pull request
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for design details and [docs/STRUCTURE.md](docs/STRUCTURE.md) for documentation guidelines.
 
 ## License
 
