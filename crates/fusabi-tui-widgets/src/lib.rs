@@ -19,7 +19,7 @@
 //! - Accessible: Keyboard-first navigation
 //! - Responsive: Adapt to terminal size
 
-use fusabi_streams_core::{Item, Stream};
+use scryforge_provider_core::{Item, Stream};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -303,8 +303,8 @@ impl<'a> PreviewWidget<'a> {
     }
 }
 
-fn extract_preview_text(content: &fusabi_streams_core::ItemContent) -> String {
-    use fusabi_streams_core::ItemContent::*;
+fn extract_preview_text(content: &scryforge_provider_core::ItemContent) -> String {
+    use scryforge_provider_core::ItemContent::*;
     match content {
         Text(s) => s.clone(),
         Markdown(s) => s.clone(), // TODO: render markdown

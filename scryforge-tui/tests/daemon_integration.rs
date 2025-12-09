@@ -3,7 +3,7 @@
 //! These tests verify that the TUI can successfully connect to the daemon
 //! and fetch streams and items via JSON-RPC.
 
-use fusabi_streams_core::{Item, Stream};
+use scryforge_provider_core::{Item, Stream};
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;

@@ -59,13 +59,14 @@
 
 use anyhow::Result;
 use crossterm::event::KeyCode;
-use fusabi_streams_core::{Item, Stream};
+use scryforge_provider_core::{Item, Stream};
 use fusabi_tui_core::prelude::*;
 use fusabi_tui_widgets::prelude::*;
 use ratatui::layout::{Constraint, Direction, Layout};
 use tokio::sync::mpsc;
 
 mod daemon_client;
+pub mod search;
 use daemon_client::{Command, Message, get_daemon_url, spawn_client_task};
 
 fn main() -> Result<()> {

@@ -8,7 +8,7 @@ authors.workspace = true
 description = "Dummy provider implementation for testing and development"
 
 [dependencies]
-fusabi-streams-core.workspace = true
+scryforge-provider-core.workspace = true
 async-trait.workspace = true
 chrono.workspace = true
 

@@ -1,4 +1,4 @@
-use fusabi_streams_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
+use scryforge_provider_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
 use fusabi_tui_widgets::prelude::*;
 use ratatui::{backend::TestBackend, layout::Rect, Terminal};
 use std::collections::HashMap;
@@ -31,7 +31,7 @@ fn create_test_item(title: &str, is_read: bool, author_name: Option<&str>) -> It
         stream_id: StreamId("test-stream".to_string()),
         title: title.to_string(),
         content: ItemContent::Text("Test content".to_string()),
-        author: author_name.map(|name| fusabi_streams_core::Author {
+        author: author_name.map(|name| scryforge_provider_core::Author {
             name: name.to_string(),
             email: None,
             url: None,

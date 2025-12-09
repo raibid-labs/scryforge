@@ -4,6 +4,7 @@
 //! over a JSON-RPC interface via TCP.
 
 pub mod handlers;
+pub mod saved_items;
 pub mod server;
 
 pub use server::start_server;

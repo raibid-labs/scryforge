@@ -1,11 +1,11 @@
 [package]
-name = "fusabi-streams-core"
+name = "scryforge-provider-core"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Core traits and types for stream-based information providers (Fusabi ecosystem)"
+description = "Core traits and types for Scryforge providers"
 
 [dependencies]
 async-trait.workspace = true
