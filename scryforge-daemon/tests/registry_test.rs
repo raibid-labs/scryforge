@@ -66,7 +66,7 @@ async fn test_registry_provider_capabilities() {
     // Check capabilities
     let caps = provider.capabilities();
     assert!(caps.has_feeds);
-    assert!(!caps.has_collections);
+    assert!(caps.has_collections); // DummyProvider now supports collections
     assert!(!caps.has_saved_items);
     assert!(!caps.has_communities);
 }

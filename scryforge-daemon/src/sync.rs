@@ -162,7 +162,10 @@ impl<C: Cache + 'static> SyncManager<C> {
         let mut state = self.state.write().await;
         for (provider_id, provider_config) in &self.config.providers {
             if provider_config.enabled {
-                state.insert(provider_id.clone(), ProviderSyncState::new(provider_id.clone()));
+                state.insert(
+                    provider_id.clone(),
+                    ProviderSyncState::new(provider_id.clone()),
+                );
             }
         }
         drop(state);
@@ -178,7 +181,10 @@ impl<C: Cache + 'static> SyncManager<C> {
             let provider = match self.registry.get(provider_id) {
                 Some(p) => p,
                 None => {
-                    warn!("Provider '{}' configured but not registered, skipping", provider_id);
+                    warn!(
+                        "Provider '{}' configured but not registered, skipping",
+                        provider_id
+                    );
                     continue;
                 }
             };
@@ -366,6 +372,11 @@ impl<C: Cache + 'static> SyncManager<C> {
         self.state.read().await.get(provider_id).cloned()
     }
 
+    /// Get the provider registry.
+    pub fn get_registry(&self) -> &Arc<ProviderRegistry> {
+        &self.registry
+    }
+
     /// Manually trigger a sync for a specific provider.
     ///
     /// This bypasses the scheduled sync interval and runs a sync immediately.
@@ -508,16 +519,27 @@ mod tests {
             ProviderCapabilities::default()
         }
 
-        async fn available_actions(&self, _item: &Item) -> scryforge_provider_core::Result<Vec<Action>> {
+        async fn available_actions(
+            &self,
+            _item: &Item,
+        ) -> scryforge_provider_core::Result<Vec<Action>> {
             Ok(vec![])
         }
 
-        async fn execute_action(&self, _item: &Item, _action: &Action) -> scryforge_provider_core::Result<ActionResult> {
+        async fn execute_action(
+            &self,
+            _item: &Item,
+            _action: &Action,
+        ) -> scryforge_provider_core::Result<ActionResult> {
             Ok(ActionResult {
                 success: true,
                 message: None,
                 data: None,
             })
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
         }
     }
 

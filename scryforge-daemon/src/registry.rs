@@ -126,9 +126,7 @@ mod tests {
 
     impl MockProvider {
         fn new(id: &str) -> Self {
-            Self {
-                id: id.to_string(),
-            }
+            Self { id: id.to_string() }
         }
     }
 
@@ -176,6 +174,10 @@ mod tests {
                 message: None,
                 data: None,
             })
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
         }
     }
 

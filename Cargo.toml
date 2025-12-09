@@ -9,14 +9,14 @@ members = [
     "scryforge-tui",
     # Provider crates:
     "providers/provider-dummy",
+    "providers/provider-bookmarks",
+    "providers/provider-email-imap",
+    "providers/provider-reddit",
+    "providers/provider-rss",
+    "providers/provider-youtube",
     # Future provider crates will be added here:
-    # "providers/provider-email-imap",
-    # "providers/provider-rss",
-    # "providers/provider-spotify",
-    # "providers/provider-youtube",
-    # "providers/provider-reddit",
-    # "providers/provider-mstodo",
-    # "providers/provider-bookmarks",
+    "providers/provider-spotify",
+    "providers/provider-mstodo",
 ]
 
 [workspace.package]

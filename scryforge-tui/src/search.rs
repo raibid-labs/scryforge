@@ -303,21 +303,25 @@ mod tests {
     #[test]
     fn test_parse_date_range() {
         let query = parse_search_query("date:2024-01-01..2024-06-01 rust");
-        assert_eq!(query.date_filter, Some("date:2024-01-01..2024-06-01".to_string()));
+        assert_eq!(
+            query.date_filter,
+            Some("date:2024-01-01..2024-06-01".to_string())
+        );
         assert!(query.has_advanced_syntax);
     }
 
     #[test]
     fn test_parse_complex_query() {
-        let query = parse_search_query(
-            r#"title:kubernetes -provider:reddit is:unread since:7d"#
-        );
+        let query = parse_search_query(r#"title:kubernetes -provider:reddit is:unread since:7d"#);
 
         assert!(query.has_advanced_syntax);
         assert_eq!(query.provider_filter, Some("!reddit".to_string()));
         assert_eq!(query.status_filters, vec![StatusFilter::Unread]);
         assert_eq!(query.date_filter, Some("since:7d".to_string()));
-        assert_eq!(query.text, r#"title:kubernetes -provider:reddit is:unread since:7d"#);
+        assert_eq!(
+            query.text,
+            r#"title:kubernetes -provider:reddit is:unread since:7d"#
+        );
     }
 
     #[test]

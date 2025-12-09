@@ -150,8 +150,9 @@ impl Config {
     fn create_default_file(path: &Path) -> Result<()> {
         // Ensure parent directory exists
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config directory: {}", parent.display()))?;
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create config directory: {}", parent.display())
+            })?;
         }
 
         let default_config = Self::default_config_content();
@@ -221,7 +222,8 @@ sync_interval_minutes = 15
 # imap_server = "imap.example.com"
 # imap_port = 993
 # use_tls = true
-"#.to_string()
+"#
+        .to_string()
     }
 
     /// Validate the configuration
@@ -229,7 +231,9 @@ sync_interval_minutes = 15
     /// Ensures all configuration values are valid and within acceptable ranges.
     pub fn validate(&self) -> Result<()> {
         // Validate bind address format
-        self.daemon.bind_address.parse::<std::net::SocketAddr>()
+        self.daemon
+            .bind_address
+            .parse::<std::net::SocketAddr>()
             .with_context(|| format!("Invalid bind_address: {}", self.daemon.bind_address))?;
 
         // Validate log level
