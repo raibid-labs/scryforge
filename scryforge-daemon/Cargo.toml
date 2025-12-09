@@ -13,6 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 scryforge-provider-core.workspace = true
+fusabi-runtime.workspace = true
+fusabi-plugin-api.workspace = true
 provider-dummy = { path = "../providers/provider-dummy" }
 tokio.workspace = true
 serde.workspace = true

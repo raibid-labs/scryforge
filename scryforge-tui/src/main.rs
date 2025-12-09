@@ -682,8 +682,39 @@ impl App {
             Some(Command::Search(query)) => {
                 self.execute_search(query);
             }
+            Some(Command::Plugin(plugin_cmd)) => {
+                self.handle_plugin_command(plugin_cmd);
+            }
             None => {
                 self.status_message = format!("Unknown command: {}", input);
+            }
+        }
+    }
+
+    /// Handle plugin management commands.
+    fn handle_plugin_command(&mut self, cmd: command::PluginCommand) {
+        use command::PluginCommand;
+        match cmd {
+            PluginCommand::List => {
+                self.status_message = "Plugin list: (fetching from daemon...)".to_string();
+                // TODO: Send RPC to daemon to list plugins
+                // For now show placeholder
+            }
+            PluginCommand::Enable(id) => {
+                self.status_message = format!("Enabling plugin: {}", id);
+                // TODO: Send RPC to daemon to enable plugin
+            }
+            PluginCommand::Disable(id) => {
+                self.status_message = format!("Disabling plugin: {}", id);
+                // TODO: Send RPC to daemon to disable plugin
+            }
+            PluginCommand::Info(id) => {
+                self.status_message = format!("Plugin info for: {}", id);
+                // TODO: Send RPC to daemon to get plugin info
+            }
+            PluginCommand::Reload => {
+                self.status_message = "Reloading plugins...".to_string();
+                // TODO: Send RPC to daemon to reload plugins
             }
         }
     }

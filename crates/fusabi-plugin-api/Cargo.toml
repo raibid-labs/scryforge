@@ -1,0 +1,27 @@
+[package]
+name = "fusabi-plugin-api"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Plugin API for Scryforge providers using Fusabi"
+
+[dependencies]
+async-trait.workspace = true
+chrono.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+# Runtime
+fusabi-runtime.workspace = true
+
+# Provider core types
+scryforge-provider-core.workspace = true
+
+[dev-dependencies]
+tempfile = "3"
