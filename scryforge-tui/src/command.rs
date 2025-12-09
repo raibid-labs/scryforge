@@ -11,6 +11,9 @@
 //! - `:sync <provider>` - Sync a specific provider
 //! - `:refresh` or `:r` - Refresh the current view
 //! - `:help` or `:h` - Show help information
+//! - `:plugin list` - List all loaded plugins
+//! - `:plugin enable <id>` - Enable a plugin
+//! - `:plugin disable <id>` - Disable a plugin
 //! - Any text without `:` prefix is treated as a search query
 
 use crate::search::{parse_search_query, SearchQuery};
@@ -28,6 +31,23 @@ pub enum Command {
     Help,
     /// Execute a search query
     Search(SearchQuery),
+    /// Plugin management commands
+    Plugin(PluginCommand),
+}
+
+/// Plugin management subcommands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PluginCommand {
+    /// List all loaded plugins
+    List,
+    /// Enable a plugin by ID
+    Enable(String),
+    /// Disable a plugin by ID
+    Disable(String),
+    /// Show info about a specific plugin
+    Info(String),
+    /// Reload plugins from disk
+    Reload,
 }
 
 /// Parse a command or search query from omnibar input.
@@ -98,9 +118,48 @@ fn parse_command_string(cmd_str: &str) -> Option<Command> {
                 Some(Command::Sync(Some(args.join(" "))))
             }
         }
-        "refresh" | "r" | "reload" => Some(Command::Refresh),
+        "refresh" | "r" => Some(Command::Refresh),
         "help" | "h" => Some(Command::Help),
+        "plugin" | "plugins" => parse_plugin_command(args),
         _ => None, // Unknown command
+    }
+}
+
+/// Parse plugin subcommands.
+fn parse_plugin_command(args: &[&str]) -> Option<Command> {
+    if args.is_empty() {
+        // Default to listing plugins
+        return Some(Command::Plugin(PluginCommand::List));
+    }
+
+    let subcommand = args[0].to_lowercase();
+    let subargs = &args[1..];
+
+    match subcommand.as_str() {
+        "list" | "ls" => Some(Command::Plugin(PluginCommand::List)),
+        "enable" | "on" => {
+            if subargs.is_empty() {
+                None // Requires plugin ID
+            } else {
+                Some(Command::Plugin(PluginCommand::Enable(subargs.join(" "))))
+            }
+        }
+        "disable" | "off" => {
+            if subargs.is_empty() {
+                None // Requires plugin ID
+            } else {
+                Some(Command::Plugin(PluginCommand::Disable(subargs.join(" "))))
+            }
+        }
+        "info" | "show" => {
+            if subargs.is_empty() {
+                None // Requires plugin ID
+            } else {
+                Some(Command::Plugin(PluginCommand::Info(subargs.join(" "))))
+            }
+        }
+        "reload" | "refresh" => Some(Command::Plugin(PluginCommand::Reload)),
+        _ => None,
     }
 }
 
@@ -111,6 +170,13 @@ pub fn get_help_text() -> &'static str {
      :sync [provider]    - Sync all providers or a specific provider\n\
      :refresh, :r        - Refresh the current view\n\
      :help, :h           - Show this help\n\
+     \n\
+     Plugin Commands:\n\
+     :plugin list        - List all loaded plugins\n\
+     :plugin enable <id> - Enable a plugin\n\
+     :plugin disable <id> - Disable a plugin\n\
+     :plugin info <id>   - Show plugin details\n\
+     :plugin reload      - Reload plugins from disk\n\
      \n\
      Search Syntax:\n\
      \"exact phrase\"      - Search for exact phrase\n\
@@ -156,6 +222,11 @@ pub fn get_command_suggestions(partial: &str) -> Vec<String> {
         (":r", "Refresh (short)"),
         (":help", "Show help"),
         (":h", "Help (short)"),
+        (":plugin list", "List loaded plugins"),
+        (":plugin enable <id>", "Enable a plugin"),
+        (":plugin disable <id>", "Disable a plugin"),
+        (":plugin info <id>", "Show plugin details"),
+        (":plugin reload", "Reload plugins"),
     ];
 
     for (cmd, desc) in &commands {
@@ -198,7 +269,6 @@ mod tests {
     fn test_parse_refresh_commands() {
         assert_eq!(parse_command(":refresh"), Some(Command::Refresh));
         assert_eq!(parse_command(":r"), Some(Command::Refresh));
-        assert_eq!(parse_command(":reload"), Some(Command::Refresh));
     }
 
     #[test]
@@ -287,5 +357,63 @@ mod tests {
         assert!(help.contains("sync"));
         assert!(help.contains("refresh"));
         assert!(help.contains("help"));
+        assert!(help.contains("plugin"));
+    }
+
+    #[test]
+    fn test_parse_plugin_commands() {
+        // Default to list
+        assert_eq!(
+            parse_command(":plugin"),
+            Some(Command::Plugin(PluginCommand::List))
+        );
+        assert_eq!(
+            parse_command(":plugin list"),
+            Some(Command::Plugin(PluginCommand::List))
+        );
+        assert_eq!(
+            parse_command(":plugin ls"),
+            Some(Command::Plugin(PluginCommand::List))
+        );
+    }
+
+    #[test]
+    fn test_parse_plugin_enable_disable() {
+        assert_eq!(
+            parse_command(":plugin enable my-plugin"),
+            Some(Command::Plugin(PluginCommand::Enable("my-plugin".to_string())))
+        );
+        assert_eq!(
+            parse_command(":plugin disable my-plugin"),
+            Some(Command::Plugin(PluginCommand::Disable("my-plugin".to_string())))
+        );
+        assert_eq!(
+            parse_command(":plugin on test"),
+            Some(Command::Plugin(PluginCommand::Enable("test".to_string())))
+        );
+        assert_eq!(
+            parse_command(":plugin off test"),
+            Some(Command::Plugin(PluginCommand::Disable("test".to_string())))
+        );
+    }
+
+    #[test]
+    fn test_parse_plugin_info_reload() {
+        assert_eq!(
+            parse_command(":plugin info my-plugin"),
+            Some(Command::Plugin(PluginCommand::Info("my-plugin".to_string())))
+        );
+        assert_eq!(
+            parse_command(":plugin reload"),
+            Some(Command::Plugin(PluginCommand::Reload))
+        );
+    }
+
+    #[test]
+    fn test_parse_plugin_missing_args() {
+        // These require arguments
+        assert_eq!(parse_command(":plugin enable"), None);
+        assert_eq!(parse_command(":plugin disable"), None);
+        assert_eq!(parse_command(":plugin info"), None);
     }
 }

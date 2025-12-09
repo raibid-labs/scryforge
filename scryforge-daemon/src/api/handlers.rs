@@ -31,6 +31,23 @@ pub struct SavedItemResponse {
     pub saved_at: String,
 }
 
+/// Plugin information returned by the API.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginInfoResponse {
+    /// Plugin unique identifier.
+    pub id: String,
+    /// Human-readable name.
+    pub name: String,
+    /// Version string.
+    pub version: String,
+    /// Whether the plugin is enabled.
+    pub enabled: bool,
+    /// Whether the plugin is a provider plugin.
+    pub is_provider: bool,
+    /// Whether the plugin has bytecode loaded.
+    pub has_bytecode: bool,
+}
+
 /// The main JSON-RPC API interface for Scryforge.
 ///
 /// This trait defines all available RPC methods that clients can call.

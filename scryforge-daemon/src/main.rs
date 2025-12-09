@@ -55,6 +55,7 @@ use tracing_subscriber::FmtSubscriber;
 
 // Use modules from the library crate
 use scryforge_daemon::api;
+use scryforge_daemon::plugin::PluginManager;
 use scryforge_daemon::registry;
 
 #[tokio::main]
@@ -70,12 +71,37 @@ async fn main() -> Result<()> {
     // TODO: Load configuration from config.toml
     // let config = load_config()?;
 
+    // Initialize plugin manager
+    let mut plugin_manager = PluginManager::new();
+
+    // Discover and load plugins
+    match plugin_manager.discover_and_load() {
+        Ok(count) => info!("Loaded {} plugin(s)", count),
+        Err(e) => info!("Plugin discovery: {}", e),
+    }
+
+    // List loaded plugins
+    let plugins = plugin_manager.list_plugins();
+    for plugin in &plugins {
+        info!(
+            "Plugin: {} v{} ({:?}) - provider: {}, bytecode: {}",
+            plugin.name,
+            plugin.version,
+            plugin.status,
+            plugin.is_provider,
+            plugin.has_bytecode
+        );
+    }
+
     // Initialize provider registry
     let mut registry = registry::ProviderRegistry::new();
 
     // Load dummy provider for testing
     info!("Loading dummy provider...");
     registry.register(provider_dummy::DummyProvider::new());
+
+    // Register plugin-based providers
+    plugin_manager.register_providers(&mut registry);
 
     // Display registered providers
     let provider_ids = registry.list();

@@ -5,6 +5,7 @@
 pub mod api;
 pub mod cache;
 pub mod config;
+pub mod plugin;
 pub mod registry;
 pub mod sync;
 pub mod unified;
