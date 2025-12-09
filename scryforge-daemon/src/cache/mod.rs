@@ -29,8 +29,8 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
-use scryforge_provider_core::{Item, ItemId, Stream, StreamId};
 use rusqlite::{params, Connection, OptionalExtension};
+use scryforge_provider_core::{Item, ItemId, Stream, StreamId};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -59,6 +59,9 @@ pub trait Cache: Send + Sync {
 
     /// Mark an item as starred (saved) or unstarred.
     fn mark_starred(&self, item_id: &ItemId, is_starred: bool) -> Result<()>;
+
+    /// Mark an item as archived or unarchived.
+    fn mark_archived(&self, item_id: &ItemId, is_archived: bool) -> Result<()>;
 
     /// Get the last sync timestamp for a provider.
     fn get_sync_state(&self, provider_id: &str) -> Result<Option<DateTime<Utc>>>;
@@ -126,7 +129,9 @@ impl SqliteCache {
         conn.execute("PRAGMA foreign_keys = ON", [])
             .context("Failed to enable foreign keys")?;
 
-        let cache = Self { conn: Mutex::new(conn) };
+        let cache = Self {
+            conn: Mutex::new(conn),
+        };
         cache.run_migrations()?;
 
         Ok(cache)
@@ -143,37 +148,38 @@ impl SqliteCache {
 
     /// Run database migrations to set up the schema.
     fn run_migrations(&self) -> Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let current_version: i32 = {
+            let conn = self.conn.lock().unwrap();
 
-        // Create schema_version table if it doesn't exist
-        conn
-            .execute(
+            // Create schema_version table if it doesn't exist
+            conn.execute(
                 "CREATE TABLE IF NOT EXISTS schema_version (
-                    version INTEGER PRIMARY KEY
-                )",
+                        version INTEGER PRIMARY KEY
+                    )",
                 [],
             )
             .context("Failed to create schema_version table")?;
 
-        // Get current schema version
-        let current_version: i32 = conn
-            .query_row("SELECT COALESCE(MAX(version), 0) FROM schema_version", [], |row| {
-                row.get(0)
-            })
-            .unwrap_or(0);
+            // Get current schema version
+            conn.query_row(
+                "SELECT COALESCE(MAX(version), 0) FROM schema_version",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap_or(0)
+        };
 
         debug!("Current schema version: {}", current_version);
 
         // Apply migrations
         if current_version < 1 {
-            drop(conn); // Release lock before calling migrate_to_v1
             self.migrate_to_v1()?;
         }
 
         // Future migrations would go here:
-        // if current_version < 2 {
-        //     self.migrate_to_v2()?;
-        // }
+        if current_version < 2 {
+            self.migrate_to_v2()?;
+        }
 
         Ok(())
     }
@@ -284,6 +290,37 @@ impl SqliteCache {
         Ok(())
     }
 
+    /// Migration to version 2: Add archived column to items table.
+    fn migrate_to_v2(&self) -> Result<()> {
+        info!("Running migration to schema version 2");
+
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+
+        // Add archived column to items table
+        tx.execute(
+            "ALTER TABLE items ADD COLUMN is_archived INTEGER NOT NULL DEFAULT 0",
+            [],
+        )
+        .context("Failed to add is_archived column")?;
+
+        // Create index for archived status
+        tx.execute(
+            "CREATE INDEX IF NOT EXISTS idx_items_is_archived
+             ON items(is_archived)",
+            [],
+        )?;
+
+        // Mark migration as complete
+        tx.execute("INSERT INTO schema_version (version) VALUES (2)", [])
+            .context("Failed to update schema version")?;
+
+        tx.commit()?;
+
+        info!("Successfully migrated to schema version 2");
+        Ok(())
+    }
+
     /// Serialize metadata HashMap to JSON string.
     fn serialize_metadata(metadata: &HashMap<String, String>) -> Result<String> {
         serde_json::to_string(metadata).context("Failed to serialize metadata")
@@ -318,49 +355,51 @@ impl Cache for SqliteCache {
                  ORDER BY name",
             )?;
 
-            let result = stmt.query_map([provider], |row| {
-                let id: String = row.get(0)?;
-                let name: String = row.get(1)?;
-                let provider_id: String = row.get(2)?;
-                let stream_type_str: String = row.get(3)?;
-                let icon: Option<String> = row.get(4)?;
-                let unread_count: Option<u32> = row.get(5)?;
-                let total_count: Option<u32> = row.get(6)?;
-                let last_updated: Option<String> = row.get(7)?;
-                let metadata_json: String = row.get(8)?;
+            let result = stmt
+                .query_map([provider], |row| {
+                    let id: String = row.get(0)?;
+                    let name: String = row.get(1)?;
+                    let provider_id: String = row.get(2)?;
+                    let stream_type_str: String = row.get(3)?;
+                    let icon: Option<String> = row.get(4)?;
+                    let unread_count: Option<u32> = row.get(5)?;
+                    let total_count: Option<u32> = row.get(6)?;
+                    let last_updated: Option<String> = row.get(7)?;
+                    let metadata_json: String = row.get(8)?;
 
-                let stream_type = match stream_type_str.as_str() {
-                    "Feed" => scryforge_provider_core::StreamType::Feed,
-                    "Collection" => scryforge_provider_core::StreamType::Collection,
-                    "SavedItems" => scryforge_provider_core::StreamType::SavedItems,
-                    "Community" => scryforge_provider_core::StreamType::Community,
-                    other => scryforge_provider_core::StreamType::Custom(other.to_string()),
-                };
+                    let stream_type = match stream_type_str.as_str() {
+                        "Feed" => scryforge_provider_core::StreamType::Feed,
+                        "Collection" => scryforge_provider_core::StreamType::Collection,
+                        "SavedItems" => scryforge_provider_core::StreamType::SavedItems,
+                        "Community" => scryforge_provider_core::StreamType::Community,
+                        other => scryforge_provider_core::StreamType::Custom(other.to_string()),
+                    };
 
-                let metadata = Self::deserialize_metadata(&metadata_json)
-                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                        8,
-                        rusqlite::types::Type::Text,
-                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-                    ))?;
+                    let metadata = Self::deserialize_metadata(&metadata_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            8,
+                            rusqlite::types::Type::Text,
+                            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+                        )
+                    })?;
 
-                let last_updated = last_updated
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc));
+                    let last_updated = last_updated
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc));
 
-                Ok(Stream {
-                    id: StreamId(id),
-                    name,
-                    provider_id,
-                    stream_type,
-                    icon,
-                    unread_count,
-                    total_count,
-                    last_updated,
-                    metadata,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+                    Ok(Stream {
+                        id: StreamId(id),
+                        name,
+                        provider_id,
+                        stream_type,
+                        icon,
+                        unread_count,
+                        total_count,
+                        last_updated,
+                        metadata,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
             result
         } else {
             let mut stmt = conn.prepare(
@@ -370,49 +409,51 @@ impl Cache for SqliteCache {
                  ORDER BY provider_id, name",
             )?;
 
-            let result = stmt.query_map([], |row| {
-                let id: String = row.get(0)?;
-                let name: String = row.get(1)?;
-                let provider_id: String = row.get(2)?;
-                let stream_type_str: String = row.get(3)?;
-                let icon: Option<String> = row.get(4)?;
-                let unread_count: Option<u32> = row.get(5)?;
-                let total_count: Option<u32> = row.get(6)?;
-                let last_updated: Option<String> = row.get(7)?;
-                let metadata_json: String = row.get(8)?;
+            let result = stmt
+                .query_map([], |row| {
+                    let id: String = row.get(0)?;
+                    let name: String = row.get(1)?;
+                    let provider_id: String = row.get(2)?;
+                    let stream_type_str: String = row.get(3)?;
+                    let icon: Option<String> = row.get(4)?;
+                    let unread_count: Option<u32> = row.get(5)?;
+                    let total_count: Option<u32> = row.get(6)?;
+                    let last_updated: Option<String> = row.get(7)?;
+                    let metadata_json: String = row.get(8)?;
 
-                let stream_type = match stream_type_str.as_str() {
-                    "Feed" => scryforge_provider_core::StreamType::Feed,
-                    "Collection" => scryforge_provider_core::StreamType::Collection,
-                    "SavedItems" => scryforge_provider_core::StreamType::SavedItems,
-                    "Community" => scryforge_provider_core::StreamType::Community,
-                    other => scryforge_provider_core::StreamType::Custom(other.to_string()),
-                };
+                    let stream_type = match stream_type_str.as_str() {
+                        "Feed" => scryforge_provider_core::StreamType::Feed,
+                        "Collection" => scryforge_provider_core::StreamType::Collection,
+                        "SavedItems" => scryforge_provider_core::StreamType::SavedItems,
+                        "Community" => scryforge_provider_core::StreamType::Community,
+                        other => scryforge_provider_core::StreamType::Custom(other.to_string()),
+                    };
 
-                let metadata = Self::deserialize_metadata(&metadata_json)
-                    .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
-                        8,
-                        rusqlite::types::Type::Text,
-                        Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-                    ))?;
+                    let metadata = Self::deserialize_metadata(&metadata_json).map_err(|e| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            8,
+                            rusqlite::types::Type::Text,
+                            Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+                        )
+                    })?;
 
-                let last_updated = last_updated
-                    .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
-                    .map(|dt| dt.with_timezone(&Utc));
+                    let last_updated = last_updated
+                        .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+                        .map(|dt| dt.with_timezone(&Utc));
 
-                Ok(Stream {
-                    id: StreamId(id),
-                    name,
-                    provider_id,
-                    stream_type,
-                    icon,
-                    unread_count,
-                    total_count,
-                    last_updated,
-                    metadata,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+                    Ok(Stream {
+                        id: StreamId(id),
+                        name,
+                        provider_id,
+                        stream_type,
+                        icon,
+                        unread_count,
+                        total_count,
+                        last_updated,
+                        metadata,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
             result
         };
 
@@ -449,7 +490,8 @@ impl Cache for SqliteCache {
             stmt.query_map(params![stream_id.as_str()], Self::row_to_item)?
         };
 
-        items.collect::<std::result::Result<Vec<_>, _>>()
+        items
+            .collect::<std::result::Result<Vec<_>, _>>()
             .context("Failed to fetch items from cache")
     }
 
@@ -577,7 +619,10 @@ impl Cache for SqliteCache {
         )?;
 
         if rows == 0 {
-            warn!("Attempted to mark non-existent item as read: {}", item_id.as_str());
+            warn!(
+                "Attempted to mark non-existent item as read: {}",
+                item_id.as_str()
+            );
         }
 
         Ok(())
@@ -592,7 +637,28 @@ impl Cache for SqliteCache {
         )?;
 
         if rows == 0 {
-            warn!("Attempted to mark non-existent item as starred: {}", item_id.as_str());
+            warn!(
+                "Attempted to mark non-existent item as starred: {}",
+                item_id.as_str()
+            );
+        }
+
+        Ok(())
+    }
+
+    fn mark_archived(&self, item_id: &ItemId, is_archived: bool) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+
+        let rows = conn.execute(
+            "UPDATE items SET is_archived = ?, updated_at = datetime('now') WHERE id = ?",
+            params![is_archived as i32, item_id.as_str()],
+        )?;
+
+        if rows == 0 {
+            warn!(
+                "Attempted to mark non-existent item as archived: {}",
+                item_id.as_str()
+            );
         }
 
         Ok(())
@@ -609,7 +675,8 @@ impl Cache for SqliteCache {
             )
             .optional()?;
 
-        Ok(result.and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
+        Ok(result
+            .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
             .map(|dt| dt.with_timezone(&Utc)))
     }
 
@@ -645,7 +712,7 @@ impl Cache for SqliteCache {
                     published, updated, url, thumbnail_url, is_read, is_saved,
                     tags, metadata
              FROM items
-             WHERE 1=1"
+             WHERE 1=1",
         );
 
         let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -695,7 +762,8 @@ impl Cache for SqliteCache {
 
         let items = stmt.query_map(params_refs.as_slice(), Self::row_to_item)?;
 
-        items.collect::<std::result::Result<Vec<_>, _>>()
+        items
+            .collect::<std::result::Result<Vec<_>, _>>()
             .context("Failed to search items from cache")
     }
 }
@@ -722,12 +790,13 @@ impl SqliteCache {
         let tags_json: String = row.get(15)?;
         let metadata_json: String = row.get(16)?;
 
-        let content = Self::deserialize_content(&content_type, &content_data)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+        let content = Self::deserialize_content(&content_type, &content_data).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(
                 4,
                 rusqlite::types::Type::Text,
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            ))?;
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            )
+        })?;
 
         let author = author_name.map(|name| scryforge_provider_core::Author {
             name,
@@ -744,19 +813,21 @@ impl SqliteCache {
             .and_then(|s| DateTime::parse_from_rfc3339(&s).ok())
             .map(|dt| dt.with_timezone(&Utc));
 
-        let tags = Self::deserialize_tags(&tags_json)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+        let tags = Self::deserialize_tags(&tags_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(
                 15,
                 rusqlite::types::Type::Text,
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            ))?;
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            )
+        })?;
 
-        let metadata = Self::deserialize_metadata(&metadata_json)
-            .map_err(|e| rusqlite::Error::FromSqlConversionFailure(
+        let metadata = Self::deserialize_metadata(&metadata_json).map_err(|e| {
+            rusqlite::Error::FromSqlConversionFailure(
                 16,
                 rusqlite::types::Type::Text,
-                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
-            ))?;
+                Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e)),
+            )
+        })?;
 
         Ok(Item {
             id: ItemId(id),
@@ -776,14 +847,21 @@ impl SqliteCache {
     }
 
     /// Serialize item content to type and JSON data.
-    fn serialize_content(content: &scryforge_provider_core::ItemContent) -> Result<(String, String)> {
+    fn serialize_content(
+        content: &scryforge_provider_core::ItemContent,
+    ) -> Result<(String, String)> {
         use scryforge_provider_core::ItemContent;
 
         let (content_type, data) = match content {
             ItemContent::Text(text) => ("Text", serde_json::json!({"text": text})),
             ItemContent::Markdown(md) => ("Markdown", serde_json::json!({"markdown": md})),
             ItemContent::Html(html) => ("Html", serde_json::json!({"html": html})),
-            ItemContent::Email { subject, body_text, body_html, snippet } => (
+            ItemContent::Email {
+                subject,
+                body_text,
+                body_html,
+                snippet,
+            } => (
                 "Email",
                 serde_json::json!({
                     "subject": subject,
@@ -792,14 +870,21 @@ impl SqliteCache {
                     "snippet": snippet,
                 }),
             ),
-            ItemContent::Article { summary, full_content } => (
+            ItemContent::Article {
+                summary,
+                full_content,
+            } => (
                 "Article",
                 serde_json::json!({
                     "summary": summary,
                     "full_content": full_content,
                 }),
             ),
-            ItemContent::Video { description, duration_seconds, view_count } => (
+            ItemContent::Video {
+                description,
+                duration_seconds,
+                view_count,
+            } => (
                 "Video",
                 serde_json::json!({
                     "description": description,
@@ -807,7 +892,11 @@ impl SqliteCache {
                     "view_count": view_count,
                 }),
             ),
-            ItemContent::Track { album, duration_ms, artists } => (
+            ItemContent::Track {
+                album,
+                duration_ms,
+                artists,
+            } => (
                 "Track",
                 serde_json::json!({
                     "album": album,
@@ -815,7 +904,11 @@ impl SqliteCache {
                     "artists": artists,
                 }),
             ),
-            ItemContent::Task { body, due_date, is_completed } => (
+            ItemContent::Task {
+                body,
+                due_date,
+                is_completed,
+            } => (
                 "Task",
                 serde_json::json!({
                     "body": body,
@@ -823,7 +916,13 @@ impl SqliteCache {
                     "is_completed": is_completed,
                 }),
             ),
-            ItemContent::Event { description, start, end, location, is_all_day } => (
+            ItemContent::Event {
+                description,
+                start,
+                end,
+                location,
+                is_all_day,
+            } => (
                 "Event",
                 serde_json::json!({
                     "description": description,
@@ -851,7 +950,10 @@ impl SqliteCache {
     }
 
     /// Deserialize item content from type and JSON data.
-    fn deserialize_content(content_type: &str, content_data: &str) -> Result<scryforge_provider_core::ItemContent> {
+    fn deserialize_content(
+        content_type: &str,
+        content_data: &str,
+    ) -> Result<scryforge_provider_core::ItemContent> {
         use scryforge_provider_core::ItemContent;
 
         let data: serde_json::Value = serde_json::from_str(content_data)?;
@@ -1205,7 +1307,10 @@ mod tests {
 
         // Delete the stream
         let conn = cache.conn.lock().unwrap();
-        conn.execute("DELETE FROM streams WHERE id = ?", params![stream.id.as_str()])?;
+        conn.execute(
+            "DELETE FROM streams WHERE id = ?",
+            params![stream.id.as_str()],
+        )?;
         drop(conn);
 
         // Items should also be deleted due to CASCADE
@@ -1310,6 +1415,39 @@ mod tests {
         // Empty query should return all items (up to limit)
         let results = cache.search_items("", None, None, None, None)?;
         assert_eq!(results.len(), 2);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mark_archived() -> Result<()> {
+        let cache = create_test_cache()?;
+
+        let stream = create_test_stream("test:feed:1", "test-provider");
+        cache.upsert_streams(&[stream.clone()])?;
+
+        let item = create_test_item("test:item:1", "test:feed:1");
+        cache.upsert_items(&[item.clone()])?;
+
+        // Mark item as archived
+        cache.mark_archived(&item.id, true)?;
+
+        // Verify the operation succeeded (no error)
+        // Note: The Item struct doesn't have is_archived field yet,
+        // but the database column is there and the operation should succeed
+
+        // Unarchive the item
+        cache.mark_archived(&item.id, false)?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_mark_archived_nonexistent_item() -> Result<()> {
+        let cache = create_test_cache()?;
+
+        // Marking non-existent item should not fail, but log a warning
+        cache.mark_archived(&ItemId("nonexistent".to_string()), true)?;
 
         Ok(())
     }
