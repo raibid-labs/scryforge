@@ -1,0 +1,1230 @@
+//! # provider-youtube
+//!
+//! YouTube provider for Scryforge using YouTube Data API v3.
+//!
+//! This provider connects to YouTube using OAuth 2.0 authentication via the
+//! Sigilforge daemon. It implements:
+//!
+//! - **Feeds**: Subscribed channels and their recent uploads
+//! - **Collections**: User playlists
+//! - **Saved Items**: Watch Later playlist and Liked Videos
+//!
+//! ## Authentication
+//!
+//! This provider requires OAuth 2.0 authentication. The token is fetched from
+//! Sigilforge daemon. Ensure the daemon is running and configured with YouTube
+//! credentials.
+//!
+//! ## API Reference
+//!
+//! - [YouTube Data API v3](https://developers.google.com/youtube/v3)
+
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use reqwest::Client;
+use scryforge_provider_core::auth::TokenFetcher;
+use scryforge_provider_core::prelude::*;
+use serde::Deserialize;
+use std::any::Any;
+use std::collections::HashMap;
+use std::sync::Arc;
+use thiserror::Error;
+
+// ============================================================================
+// Error Types
+// ============================================================================
+
+#[derive(Error, Debug)]
+pub enum YouTubeError {
+    #[error("HTTP request failed: {0}")]
+    HttpError(#[from] reqwest::Error),
+
+    #[error("Failed to fetch auth token: {0}")]
+    AuthError(String),
+
+    #[error("YouTube API error: {0}")]
+    ApiError(String),
+
+    #[error("Failed to parse response: {0}")]
+    ParseError(String),
+}
+
+impl From<YouTubeError> for StreamError {
+    fn from(err: YouTubeError) -> Self {
+        match err {
+            YouTubeError::HttpError(e) => StreamError::Network(e.to_string()),
+            YouTubeError::AuthError(e) => StreamError::AuthRequired(e),
+            YouTubeError::ApiError(e) => StreamError::Provider(e),
+            YouTubeError::ParseError(e) => StreamError::Internal(e),
+        }
+    }
+}
+
+// ============================================================================
+// YouTube API Response Types
+// ============================================================================
+
+#[derive(Debug, Deserialize)]
+struct YouTubeResponse<T> {
+    items: Vec<T>,
+    #[serde(rename = "nextPageToken")]
+    next_page_token: Option<String>,
+    #[serde(rename = "pageInfo")]
+    page_info: Option<PageInfo>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PageInfo {
+    #[serde(rename = "totalResults")]
+    total_results: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct YouTubeSubscription {
+    id: String,
+    snippet: SubscriptionSnippet,
+}
+
+#[derive(Debug, Deserialize)]
+struct SubscriptionSnippet {
+    title: String,
+    description: String,
+    #[serde(rename = "resourceId")]
+    resource_id: ResourceId,
+    thumbnails: Option<Thumbnails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ResourceId {
+    #[serde(rename = "channelId")]
+    channel_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct YouTubeVideo {
+    id: String,
+    snippet: VideoSnippet,
+    #[serde(rename = "contentDetails")]
+    content_details: Option<ContentDetails>,
+    statistics: Option<Statistics>,
+}
+
+#[derive(Debug, Deserialize)]
+struct VideoSnippet {
+    #[serde(rename = "publishedAt")]
+    published_at: String,
+    #[serde(rename = "channelId")]
+    channel_id: String,
+    #[serde(rename = "channelTitle")]
+    channel_title: String,
+    title: String,
+    description: String,
+    thumbnails: Option<Thumbnails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ContentDetails {
+    duration: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Statistics {
+    #[serde(rename = "viewCount")]
+    view_count: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Thumbnails {
+    default: Option<Thumbnail>,
+    medium: Option<Thumbnail>,
+    high: Option<Thumbnail>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Thumbnail {
+    url: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct YouTubePlaylist {
+    id: String,
+    snippet: PlaylistSnippet,
+    #[serde(rename = "contentDetails")]
+    content_details: Option<PlaylistContentDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaylistSnippet {
+    title: String,
+    description: Option<String>,
+    thumbnails: Option<Thumbnails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaylistContentDetails {
+    #[serde(rename = "itemCount")]
+    item_count: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct YouTubePlaylistItem {
+    id: String,
+    snippet: PlaylistItemSnippet,
+    #[serde(rename = "contentDetails")]
+    content_details: Option<PlaylistItemContentDetails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaylistItemSnippet {
+    #[serde(rename = "publishedAt")]
+    published_at: String,
+    #[serde(rename = "channelId")]
+    channel_id: String,
+    #[serde(rename = "channelTitle")]
+    channel_title: String,
+    title: String,
+    description: String,
+    thumbnails: Option<Thumbnails>,
+    #[serde(rename = "resourceId")]
+    resource_id: ResourceId,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaylistItemContentDetails {
+    #[serde(rename = "videoId")]
+    video_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct YouTubeChannel {
+    id: String,
+    snippet: ChannelSnippet,
+    statistics: Option<ChannelStatistics>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChannelSnippet {
+    title: String,
+    description: Option<String>,
+    thumbnails: Option<Thumbnails>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChannelStatistics {
+    #[serde(rename = "videoCount")]
+    video_count: Option<String>,
+}
+
+// ============================================================================
+// YouTube Provider Implementation
+// ============================================================================
+
+/// YouTube provider that connects to YouTube Data API v3.
+pub struct YouTubeProvider {
+    client: Client,
+    token_fetcher: Arc<dyn TokenFetcher>,
+    account_name: String,
+}
+
+impl YouTubeProvider {
+    const API_BASE: &'static str = "https://www.googleapis.com/youtube/v3";
+
+    /// Create a new YouTube provider instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `token_fetcher` - Token fetcher for OAuth authentication
+    /// * `account_name` - Account name for token lookup (e.g., "personal")
+    pub fn new(token_fetcher: Arc<dyn TokenFetcher>, account_name: String) -> Self {
+        Self {
+            client: Client::new(),
+            token_fetcher,
+            account_name,
+        }
+    }
+
+    /// Fetch the OAuth access token from Sigilforge.
+    async fn get_access_token(&self) -> Result<String> {
+        self.token_fetcher
+            .fetch_token("youtube", &self.account_name)
+            .await
+            .map_err(|e| YouTubeError::AuthError(e.to_string()).into())
+    }
+
+    /// Make an authenticated GET request to the YouTube API.
+    async fn api_get<T: for<'de> Deserialize<'de>>(
+        &self,
+        endpoint: &str,
+        params: &[(&str, &str)],
+    ) -> std::result::Result<T, YouTubeError> {
+        let token = self
+            .token_fetcher
+            .fetch_token("youtube", &self.account_name)
+            .await
+            .map_err(|e| YouTubeError::AuthError(e.to_string()))?;
+
+        let url = format!("{}{}", Self::API_BASE, endpoint);
+        let response = self
+            .client
+            .get(&url)
+            .bearer_auth(&token)
+            .query(params)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(YouTubeError::ApiError(format!(
+                "API returned status {}: {}",
+                status, error_text
+            )));
+        }
+
+        response
+            .json::<T>()
+            .await
+            .map_err(|e| YouTubeError::ParseError(e.to_string()))
+    }
+
+    /// Parse ISO 8601 duration (PT1H30M15S) to seconds.
+    fn parse_duration(duration: &str) -> Option<u32> {
+        // Simple parser for ISO 8601 duration format
+        // Format: PT[hours]H[minutes]M[seconds]S
+        let duration = duration.strip_prefix("PT")?;
+        let mut total_seconds = 0u32;
+
+        let mut current_num = String::new();
+        for ch in duration.chars() {
+            if ch.is_ascii_digit() {
+                current_num.push(ch);
+            } else {
+                let num: u32 = current_num.parse().ok()?;
+                match ch {
+                    'H' => total_seconds += num * 3600,
+                    'M' => total_seconds += num * 60,
+                    'S' => total_seconds += num,
+                    _ => return None,
+                }
+                current_num.clear();
+            }
+        }
+
+        Some(total_seconds)
+    }
+
+    /// Parse RFC 3339 timestamp to DateTime<Utc>.
+    fn parse_timestamp(timestamp: &str) -> Option<DateTime<Utc>> {
+        DateTime::parse_from_rfc3339(timestamp)
+            .ok()
+            .map(|dt| dt.with_timezone(&Utc))
+    }
+
+    /// Get the best thumbnail URL from a Thumbnails object.
+    fn get_thumbnail_url(thumbnails: &Option<Thumbnails>) -> Option<String> {
+        thumbnails.as_ref().and_then(|t| {
+            t.high
+                .as_ref()
+                .or(t.medium.as_ref())
+                .or(t.default.as_ref())
+                .map(|thumb| thumb.url.clone())
+        })
+    }
+
+    /// Convert a YouTube video to an Item.
+    fn video_to_item(&self, video: YouTubeVideo, stream_id: StreamId) -> Item {
+        let video_id = video.id.clone();
+        let url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+        let duration_seconds = video
+            .content_details
+            .and_then(|cd| cd.duration)
+            .and_then(|d| Self::parse_duration(&d));
+
+        let view_count = video
+            .statistics
+            .and_then(|s| s.view_count)
+            .and_then(|vc| vc.parse::<u64>().ok());
+
+        Item {
+            id: ItemId::new("youtube", &video_id),
+            stream_id,
+            title: video.snippet.title,
+            content: ItemContent::Video {
+                description: video.snippet.description,
+                duration_seconds,
+                view_count,
+            },
+            author: Some(Author {
+                name: video.snippet.channel_title,
+                email: None,
+                url: Some(format!(
+                    "https://www.youtube.com/channel/{}",
+                    video.snippet.channel_id
+                )),
+                avatar_url: None,
+            }),
+            published: Self::parse_timestamp(&video.snippet.published_at),
+            updated: None,
+            url: Some(url),
+            thumbnail_url: Self::get_thumbnail_url(&video.snippet.thumbnails),
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
+    /// Fetch video details by IDs.
+    async fn fetch_video_details(
+        &self,
+        video_ids: &[String],
+    ) -> std::result::Result<Vec<YouTubeVideo>, YouTubeError> {
+        if video_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let ids = video_ids.join(",");
+        let response: YouTubeResponse<YouTubeVideo> = self
+            .api_get(
+                "/videos",
+                &[
+                    ("part", "snippet,contentDetails,statistics"),
+                    ("id", &ids),
+                    ("maxResults", "50"),
+                ],
+            )
+            .await?;
+
+        Ok(response.items)
+    }
+}
+
+#[async_trait]
+impl Provider for YouTubeProvider {
+    fn id(&self) -> &'static str {
+        "youtube"
+    }
+
+    fn name(&self) -> &'static str {
+        "YouTube"
+    }
+
+    async fn health_check(&self) -> Result<ProviderHealth> {
+        // Try to fetch a minimal response to check connectivity
+        match self.get_access_token().await {
+            Ok(_) => Ok(ProviderHealth {
+                is_healthy: true,
+                message: Some("YouTube provider is connected".to_string()),
+                last_sync: Some(Utc::now()),
+                error_count: 0,
+            }),
+            Err(e) => Ok(ProviderHealth {
+                is_healthy: false,
+                message: Some(format!("Authentication failed: {}", e)),
+                last_sync: None,
+                error_count: 1,
+            }),
+        }
+    }
+
+    async fn sync(&self) -> Result<SyncResult> {
+        let start = std::time::Instant::now();
+
+        // In a real implementation, this would sync data to a local cache
+        // For now, we'll just verify we can connect
+        match self.get_access_token().await {
+            Ok(_) => Ok(SyncResult {
+                success: true,
+                items_added: 0,
+                items_updated: 0,
+                items_removed: 0,
+                errors: vec![],
+                duration_ms: start.elapsed().as_millis() as u64,
+            }),
+            Err(e) => Ok(SyncResult {
+                success: false,
+                items_added: 0,
+                items_updated: 0,
+                items_removed: 0,
+                errors: vec![e.to_string()],
+                duration_ms: start.elapsed().as_millis() as u64,
+            }),
+        }
+    }
+
+    fn capabilities(&self) -> ProviderCapabilities {
+        ProviderCapabilities {
+            has_feeds: true,
+            has_collections: true,
+            has_saved_items: true,
+            has_communities: false,
+        }
+    }
+
+    async fn available_actions(&self, _item: &Item) -> Result<Vec<Action>> {
+        Ok(vec![
+            Action {
+                id: "open".to_string(),
+                name: "Open in YouTube".to_string(),
+                description: "Open video in YouTube".to_string(),
+                kind: ActionKind::OpenInBrowser,
+                keyboard_shortcut: Some("o".to_string()),
+            },
+            Action {
+                id: "copy_link".to_string(),
+                name: "Copy Link".to_string(),
+                description: "Copy video URL to clipboard".to_string(),
+                kind: ActionKind::CopyLink,
+                keyboard_shortcut: Some("c".to_string()),
+            },
+            Action {
+                id: "save".to_string(),
+                name: "Add to Watch Later".to_string(),
+                description: "Add video to Watch Later playlist".to_string(),
+                kind: ActionKind::Save,
+                keyboard_shortcut: Some("s".to_string()),
+            },
+        ])
+    }
+
+    async fn execute_action(&self, item: &Item, action: &Action) -> Result<ActionResult> {
+        match action.kind {
+            ActionKind::OpenInBrowser => {
+                if let Some(url) = &item.url {
+                    Ok(ActionResult {
+                        success: true,
+                        message: Some(format!("Opening: {}", url)),
+                        data: Some(serde_json::json!({ "url": url })),
+                    })
+                } else {
+                    Ok(ActionResult {
+                        success: false,
+                        message: Some("No URL available".to_string()),
+                        data: None,
+                    })
+                }
+            }
+            ActionKind::CopyLink => {
+                if let Some(url) = &item.url {
+                    Ok(ActionResult {
+                        success: true,
+                        message: Some("Link copied to clipboard".to_string()),
+                        data: Some(serde_json::json!({ "url": url })),
+                    })
+                } else {
+                    Ok(ActionResult {
+                        success: false,
+                        message: Some("No URL available".to_string()),
+                        data: None,
+                    })
+                }
+            }
+            _ => Ok(ActionResult {
+                success: true,
+                message: Some(format!("Executed action: {}", action.name)),
+                data: None,
+            }),
+        }
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
+#[async_trait]
+impl HasFeeds for YouTubeProvider {
+    async fn list_feeds(&self) -> Result<Vec<Feed>> {
+        let response: YouTubeResponse<YouTubeSubscription> = self
+            .api_get(
+                "/subscriptions",
+                &[("part", "snippet"), ("mine", "true"), ("maxResults", "50")],
+            )
+            .await
+            .map_err(StreamError::from)?;
+
+        let feeds = response
+            .items
+            .into_iter()
+            .map(|sub| Feed {
+                id: FeedId(sub.snippet.resource_id.channel_id.clone()),
+                name: sub.snippet.title,
+                description: Some(sub.snippet.description),
+                icon: Self::get_thumbnail_url(&sub.snippet.thumbnails),
+                unread_count: None,
+                total_count: None,
+            })
+            .collect();
+
+        Ok(feeds)
+    }
+
+    async fn get_feed_items(&self, feed_id: &FeedId, options: FeedOptions) -> Result<Vec<Item>> {
+        let channel_id = &feed_id.0;
+        let stream_id = StreamId::new("youtube", "feed", channel_id);
+
+        // Get the uploads playlist ID for the channel
+        let channel_response: YouTubeResponse<YouTubeChannel> = self
+            .api_get(
+                "/channels",
+                &[("part", "contentDetails"), ("id", channel_id)],
+            )
+            .await
+            .map_err(StreamError::from)?;
+
+        if channel_response.items.is_empty() {
+            return Err(StreamError::StreamNotFound(format!(
+                "Channel not found: {}",
+                channel_id
+            )));
+        }
+
+        // Get recent uploads from the channel
+        // YouTube channels have an "uploads" playlist we can query
+        let limit = options.limit.unwrap_or(25).min(50);
+        let limit_str = limit.to_string();
+        let params = vec![
+            ("part", "snippet,contentDetails"),
+            ("channelId", channel_id),
+            ("maxResults", limit_str.as_str()),
+            ("order", "date"),
+            ("type", "video"),
+        ];
+
+        let search_response: YouTubeResponse<serde_json::Value> = self
+            .api_get("/search", &params)
+            .await
+            .map_err(StreamError::from)?;
+
+        // Extract video IDs from search results
+        let video_ids: Vec<String> = search_response
+            .items
+            .iter()
+            .filter_map(|item| {
+                item.get("id")
+                    .and_then(|id| id.get("videoId"))
+                    .and_then(|vid| vid.as_str())
+                    .map(|s| s.to_string())
+            })
+            .collect();
+
+        // Fetch full video details
+        let videos = self
+            .fetch_video_details(&video_ids)
+            .await
+            .map_err(StreamError::from)?;
+
+        let mut items: Vec<Item> = videos
+            .into_iter()
+            .map(|video| self.video_to_item(video, stream_id.clone()))
+            .collect();
+
+        // Apply filters
+        if let Some(since) = options.since {
+            items.retain(|item| item.published.is_some_and(|pub_date| pub_date > since));
+        }
+
+        // Apply offset and limit
+        let offset = options.offset.unwrap_or(0) as usize;
+        items = items.into_iter().skip(offset).collect();
+
+        Ok(items)
+    }
+}
+
+#[async_trait]
+impl HasCollections for YouTubeProvider {
+    async fn list_collections(&self) -> Result<Vec<Collection>> {
+        let response: YouTubeResponse<YouTubePlaylist> = self
+            .api_get(
+                "/playlists",
+                &[
+                    ("part", "snippet,contentDetails"),
+                    ("mine", "true"),
+                    ("maxResults", "50"),
+                ],
+            )
+            .await
+            .map_err(StreamError::from)?;
+
+        let collections = response
+            .items
+            .into_iter()
+            .map(|playlist| Collection {
+                id: CollectionId(playlist.id),
+                name: playlist.snippet.title,
+                description: playlist.snippet.description,
+                icon: Self::get_thumbnail_url(&playlist.snippet.thumbnails),
+                item_count: playlist
+                    .content_details
+                    .map(|cd| cd.item_count)
+                    .unwrap_or(0),
+                is_editable: true, // User's own playlists are editable
+                owner: Some("me".to_string()),
+            })
+            .collect();
+
+        Ok(collections)
+    }
+
+    async fn get_collection_items(&self, collection_id: &CollectionId) -> Result<Vec<Item>> {
+        let playlist_id = &collection_id.0;
+        let stream_id = StreamId::new("youtube", "playlist", playlist_id);
+
+        let response: YouTubeResponse<YouTubePlaylistItem> = self
+            .api_get(
+                "/playlistItems",
+                &[
+                    ("part", "snippet,contentDetails"),
+                    ("playlistId", playlist_id),
+                    ("maxResults", "50"),
+                ],
+            )
+            .await
+            .map_err(StreamError::from)?;
+
+        // Extract video IDs
+        let video_ids: Vec<String> = response
+            .items
+            .iter()
+            .filter_map(|item| item.content_details.as_ref())
+            .map(|cd| cd.video_id.clone())
+            .collect();
+
+        // Fetch full video details
+        let videos = self
+            .fetch_video_details(&video_ids)
+            .await
+            .map_err(StreamError::from)?;
+
+        let items = videos
+            .into_iter()
+            .map(|video| self.video_to_item(video, stream_id.clone()))
+            .collect();
+
+        Ok(items)
+    }
+
+    async fn add_to_collection(
+        &self,
+        collection_id: &CollectionId,
+        item_id: &ItemId,
+    ) -> Result<()> {
+        // Extract video ID from item_id (format: "youtube:VIDEO_ID")
+        let video_id = item_id
+            .0
+            .strip_prefix("youtube:")
+            .ok_or_else(|| StreamError::Provider("Invalid item ID format".to_string()))?;
+
+        let playlist_id = &collection_id.0;
+
+        // Add video to playlist
+        let token = self.get_access_token().await?;
+        let url = format!("{}/playlistItems", Self::API_BASE);
+
+        let body = serde_json::json!({
+            "snippet": {
+                "playlistId": playlist_id,
+                "resourceId": {
+                    "kind": "youtube#video",
+                    "videoId": video_id
+                }
+            }
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .bearer_auth(&token)
+            .query(&[("part", "snippet")])
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to add to collection: {} - {}",
+                status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn remove_from_collection(
+        &self,
+        collection_id: &CollectionId,
+        item_id: &ItemId,
+    ) -> Result<()> {
+        // To remove an item, we need to find the playlistItem ID first
+        // This is a simplified implementation - in production, you'd cache this mapping
+        let playlist_id = &collection_id.0;
+        let video_id = item_id
+            .0
+            .strip_prefix("youtube:")
+            .ok_or_else(|| StreamError::Provider("Invalid item ID format".to_string()))?;
+
+        // Get playlist items to find the specific playlistItem ID
+        let response: YouTubeResponse<YouTubePlaylistItem> = self
+            .api_get(
+                "/playlistItems",
+                &[
+                    ("part", "id,contentDetails"),
+                    ("playlistId", playlist_id),
+                    ("maxResults", "50"),
+                ],
+            )
+            .await
+            .map_err(StreamError::from)?;
+
+        // Find the playlist item with matching video ID
+        let playlist_item_id = response
+            .items
+            .iter()
+            .find(|item| {
+                item.content_details
+                    .as_ref()
+                    .map(|cd| cd.video_id == video_id)
+                    .unwrap_or(false)
+            })
+            .map(|item| item.id.clone())
+            .ok_or_else(|| StreamError::ItemNotFound(format!("Item not found in collection")))?;
+
+        // Delete the playlist item
+        let token = self.get_access_token().await?;
+        let url = format!("{}/playlistItems", Self::API_BASE);
+
+        let response = self
+            .client
+            .delete(&url)
+            .bearer_auth(&token)
+            .query(&[("id", playlist_item_id.as_str())])
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to remove from collection: {} - {}",
+                status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn create_collection(&self, name: &str) -> Result<Collection> {
+        let token = self.get_access_token().await?;
+        let url = format!("{}/playlists", Self::API_BASE);
+
+        let body = serde_json::json!({
+            "snippet": {
+                "title": name,
+                "description": format!("Created by Scryforge")
+            },
+            "status": {
+                "privacyStatus": "private"
+            }
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .bearer_auth(&token)
+            .query(&[("part", "snippet,status,contentDetails")])
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to create collection: {} - {}",
+                status, error_text
+            )));
+        }
+
+        let playlist: YouTubePlaylist = response
+            .json()
+            .await
+            .map_err(|e| StreamError::Internal(format!("Failed to parse response: {}", e)))?;
+
+        Ok(Collection {
+            id: CollectionId(playlist.id),
+            name: playlist.snippet.title,
+            description: playlist.snippet.description,
+            icon: Self::get_thumbnail_url(&playlist.snippet.thumbnails),
+            item_count: playlist
+                .content_details
+                .map(|cd| cd.item_count)
+                .unwrap_or(0),
+            is_editable: true,
+            owner: Some("me".to_string()),
+        })
+    }
+}
+
+#[async_trait]
+impl HasSavedItems for YouTubeProvider {
+    async fn get_saved_items(&self, options: SavedItemsOptions) -> Result<Vec<Item>> {
+        let stream_id = StreamId::new("youtube", "saved", "watch-later-liked");
+
+        // Fetch both Watch Later (WL) and Liked Videos (LL)
+        // These are special playlist IDs in YouTube
+        let mut all_videos = Vec::new();
+
+        // Fetch Watch Later
+        if options.category.is_none() || options.category.as_deref() == Some("watch-later") {
+            if let Ok(response) = self
+                .api_get::<YouTubeResponse<YouTubePlaylistItem>>(
+                    "/playlistItems",
+                    &[
+                        ("part", "snippet,contentDetails"),
+                        ("playlistId", "WL"), // Watch Later playlist
+                        ("maxResults", "50"),
+                    ],
+                )
+                .await
+            {
+                let video_ids: Vec<String> = response
+                    .items
+                    .iter()
+                    .filter_map(|item| item.content_details.as_ref())
+                    .map(|cd| cd.video_id.clone())
+                    .collect();
+
+                if let Ok(videos) = self.fetch_video_details(&video_ids).await {
+                    all_videos.extend(videos);
+                }
+            }
+        }
+
+        // Fetch Liked Videos
+        if options.category.is_none() || options.category.as_deref() == Some("liked") {
+            if let Ok(response) = self
+                .api_get::<YouTubeResponse<YouTubePlaylistItem>>(
+                    "/playlistItems",
+                    &[
+                        ("part", "snippet,contentDetails"),
+                        ("playlistId", "LL"), // Liked videos playlist
+                        ("maxResults", "50"),
+                    ],
+                )
+                .await
+            {
+                let video_ids: Vec<String> = response
+                    .items
+                    .iter()
+                    .filter_map(|item| item.content_details.as_ref())
+                    .map(|cd| cd.video_id.clone())
+                    .collect();
+
+                if let Ok(videos) = self.fetch_video_details(&video_ids).await {
+                    all_videos.extend(videos);
+                }
+            }
+        }
+
+        let mut items: Vec<Item> = all_videos
+            .into_iter()
+            .map(|video| self.video_to_item(video, stream_id.clone()))
+            .collect();
+
+        // Apply offset and limit
+        let offset = options.offset.unwrap_or(0) as usize;
+        let limit = options.limit.map(|l| l as usize);
+
+        items = items.into_iter().skip(offset).collect();
+        if let Some(limit) = limit {
+            items.truncate(limit);
+        }
+
+        Ok(items)
+    }
+
+    async fn is_saved(&self, _item_id: &ItemId) -> Result<bool> {
+        // This would require checking if the video exists in Watch Later or Liked Videos
+        // For simplicity, we'll return false (not implemented in this version)
+        Ok(false)
+    }
+
+    async fn save_item(&self, item_id: &ItemId) -> Result<()> {
+        // Save to Watch Later playlist
+        let video_id = item_id
+            .0
+            .strip_prefix("youtube:")
+            .ok_or_else(|| StreamError::Provider("Invalid item ID format".to_string()))?;
+
+        let token = self.get_access_token().await?;
+        let url = format!("{}/playlistItems", Self::API_BASE);
+
+        let body = serde_json::json!({
+            "snippet": {
+                "playlistId": "WL", // Watch Later playlist ID
+                "resourceId": {
+                    "kind": "youtube#video",
+                    "videoId": video_id
+                }
+            }
+        });
+
+        let response = self
+            .client
+            .post(&url)
+            .bearer_auth(&token)
+            .query(&[("part", "snippet")])
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to save item: {} - {}",
+                status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    async fn unsave_item(&self, item_id: &ItemId) -> Result<()> {
+        // Remove from Watch Later playlist
+        let video_id = item_id
+            .0
+            .strip_prefix("youtube:")
+            .ok_or_else(|| StreamError::Provider("Invalid item ID format".to_string()))?;
+
+        // Get Watch Later playlist items to find the playlistItem ID
+        let response: YouTubeResponse<YouTubePlaylistItem> = self
+            .api_get(
+                "/playlistItems",
+                &[
+                    ("part", "id,contentDetails"),
+                    ("playlistId", "WL"),
+                    ("maxResults", "50"),
+                ],
+            )
+            .await
+            .map_err(StreamError::from)?;
+
+        // Find the playlist item with matching video ID
+        let playlist_item_id = response
+            .items
+            .iter()
+            .find(|item| {
+                item.content_details
+                    .as_ref()
+                    .map(|cd| cd.video_id == video_id)
+                    .unwrap_or(false)
+            })
+            .map(|item| item.id.clone())
+            .ok_or_else(|| StreamError::ItemNotFound(format!("Item not found in Watch Later")))?;
+
+        // Delete the playlist item
+        let token = self.get_access_token().await?;
+        let url = format!("{}/playlistItems", Self::API_BASE);
+
+        let response = self
+            .client
+            .delete(&url)
+            .bearer_auth(&token)
+            .query(&[("id", playlist_item_id.as_str())])
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to unsave item: {} - {}",
+                status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use scryforge_provider_core::auth::MockTokenFetcher;
+
+    fn create_test_provider() -> YouTubeProvider {
+        let mock_fetcher = MockTokenFetcher::empty().with_token(
+            "youtube".to_string(),
+            "test".to_string(),
+            "test-token".to_string(),
+        );
+        YouTubeProvider::new(Arc::new(mock_fetcher), "test".to_string())
+    }
+
+    #[test]
+    fn test_provider_id() {
+        let provider = create_test_provider();
+        assert_eq!(provider.id(), "youtube");
+        assert_eq!(provider.name(), "YouTube");
+    }
+
+    #[test]
+    fn test_capabilities() {
+        let provider = create_test_provider();
+        let caps = provider.capabilities();
+        assert!(caps.has_feeds);
+        assert!(caps.has_collections);
+        assert!(caps.has_saved_items);
+        assert!(!caps.has_communities);
+    }
+
+    #[test]
+    fn test_parse_duration() {
+        assert_eq!(YouTubeProvider::parse_duration("PT1H30M15S"), Some(5415));
+        assert_eq!(YouTubeProvider::parse_duration("PT5M"), Some(300));
+        assert_eq!(YouTubeProvider::parse_duration("PT45S"), Some(45));
+        assert_eq!(YouTubeProvider::parse_duration("PT1H"), Some(3600));
+        assert_eq!(YouTubeProvider::parse_duration("PT0S"), Some(0));
+        assert_eq!(YouTubeProvider::parse_duration("invalid"), None);
+    }
+
+    #[test]
+    fn test_parse_timestamp() {
+        let result = YouTubeProvider::parse_timestamp("2023-12-09T10:30:00Z");
+        assert!(result.is_some());
+
+        let result = YouTubeProvider::parse_timestamp("invalid");
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_available_actions() {
+        let provider = create_test_provider();
+        let item = Item {
+            id: ItemId::new("youtube", "test-video"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test Video".to_string(),
+            content: ItemContent::Video {
+                description: "Test description".to_string(),
+                duration_seconds: Some(300),
+                view_count: Some(1000),
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=test".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+
+        let actions = provider.available_actions(&item).await.unwrap();
+        assert_eq!(actions.len(), 3);
+        assert_eq!(actions[0].kind, ActionKind::OpenInBrowser);
+        assert_eq!(actions[1].kind, ActionKind::CopyLink);
+        assert_eq!(actions[2].kind, ActionKind::Save);
+    }
+
+    #[tokio::test]
+    async fn test_execute_action_open_in_browser() {
+        let provider = create_test_provider();
+        let item = Item {
+            id: ItemId::new("youtube", "test-video"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test Video".to_string(),
+            content: ItemContent::Video {
+                description: "Test".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=test".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+
+        let action = Action {
+            id: "open".to_string(),
+            name: "Open".to_string(),
+            description: "Open video".to_string(),
+            kind: ActionKind::OpenInBrowser,
+            keyboard_shortcut: None,
+        };
+
+        let result = provider.execute_action(&item, &action).await.unwrap();
+        assert!(result.success);
+        assert!(result.message.is_some());
+    }
+
+    #[test]
+    fn test_video_to_item_conversion() {
+        let provider = create_test_provider();
+        let video = YouTubeVideo {
+            id: "test-video-id".to_string(),
+            snippet: VideoSnippet {
+                published_at: "2023-12-09T10:30:00Z".to_string(),
+                channel_id: "test-channel-id".to_string(),
+                channel_title: "Test Channel".to_string(),
+                title: "Test Video".to_string(),
+                description: "Test description".to_string(),
+                thumbnails: None,
+            },
+            content_details: Some(ContentDetails {
+                duration: Some("PT5M30S".to_string()),
+            }),
+            statistics: Some(Statistics {
+                view_count: Some("1000".to_string()),
+            }),
+        };
+
+        let stream_id = StreamId::new("youtube", "feed", "test");
+        let item = provider.video_to_item(video, stream_id.clone());
+
+        assert_eq!(item.id.0, "youtube:test-video-id");
+        assert_eq!(item.title, "Test Video");
+        assert_eq!(item.stream_id, stream_id);
+        assert!(item.url.is_some());
+        assert_eq!(
+            item.url.unwrap(),
+            "https://www.youtube.com/watch?v=test-video-id"
+        );
+
+        match item.content {
+            ItemContent::Video {
+                description,
+                duration_seconds,
+                view_count,
+            } => {
+                assert_eq!(description, "Test description");
+                assert_eq!(duration_seconds, Some(330)); // 5 minutes 30 seconds
+                assert_eq!(view_count, Some(1000));
+            }
+            _ => panic!("Expected Video content"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_health_check_with_mock() {
+        let provider = create_test_provider();
+        // Mock fetcher will return a test token
+        let health = provider.health_check().await.unwrap();
+        assert!(health.is_healthy);
+    }
+}
