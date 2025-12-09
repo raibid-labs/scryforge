@@ -146,16 +146,45 @@ scryforge/
 
 ## Getting Started
 
+### Quick Start
+
 ```bash
 # Build all crates
 cargo build
 
-# Run the daemon
+# Run the daemon (in one terminal)
 cargo run --bin scryforge-daemon
 
 # Run the TUI (in another terminal)
 cargo run --bin scryforge-tui
 ```
+
+### Documentation
+
+- **[Getting Started Guide](docs/GETTING_STARTED.md)** - Installation, first run, and basic usage
+- **[Configuration Guide](docs/CONFIGURATION.md)** - Complete config.toml reference
+- **[Keybindings Reference](docs/KEYBINDINGS.md)** - All keyboard shortcuts
+- **[Commands Reference](docs/COMMANDS.md)** - Omnibar commands and search syntax
+- **[Architecture](docs/ARCHITECTURE.md)** - System design and implementation details
+- **[Roadmap](docs/ROADMAP.md)** - Development phases and planned features
+- **[Providers](docs/PROVIDERS.md)** - Provider capability model and integration guide
+
+## Usage
+
+The TUI uses vim-style keybindings for efficient navigation:
+
+| Key | Action |
+|-----|--------|
+| `h/l` or `Tab` | Switch between panes |
+| `j/k` or `↑/↓` | Navigate lists |
+| `/` | Search |
+| `:` | Commands (`:quit`, `:sync`, `:refresh`, etc.) |
+| `r` | Toggle read/unread |
+| `s` | Save/unsave item |
+| `?` | Show help |
+| `q` | Quit |
+
+See [docs/KEYBINDINGS.md](docs/KEYBINDINGS.md) and [docs/COMMANDS.md](docs/COMMANDS.md) for complete references.
 
 ## Development
 
