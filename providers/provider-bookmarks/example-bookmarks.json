@@ -1,0 +1,94 @@
+{
+  "bookmarks": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440001",
+      "url": "https://www.rust-lang.org",
+      "title": "The Rust Programming Language",
+      "description": "Official Rust website with documentation, tutorials, and community resources",
+      "tags": ["rust", "programming", "systems"],
+      "folder": "Development/Rust",
+      "created_at": "2024-01-15T10:30:00Z",
+      "updated_at": "2024-01-15T10:30:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440002",
+      "url": "https://docs.rs",
+      "title": "Docs.rs - Rust Package Documentation",
+      "description": "Comprehensive documentation for all Rust crates",
+      "tags": ["rust", "documentation", "reference"],
+      "folder": "Development/Rust",
+      "created_at": "2024-01-15T10:32:00Z",
+      "updated_at": "2024-01-15T10:32:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440003",
+      "url": "https://github.com/rust-lang/rust",
+      "title": "Rust Programming Language Repository",
+      "description": "The main Rust language repository on GitHub",
+      "tags": ["rust", "github", "open-source"],
+      "folder": "Development/Rust",
+      "created_at": "2024-01-15T10:35:00Z",
+      "updated_at": "2024-01-15T10:35:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440004",
+      "url": "https://tokio.rs",
+      "title": "Tokio - Asynchronous Rust Runtime",
+      "description": "The most popular async runtime for Rust applications",
+      "tags": ["rust", "async", "runtime", "tokio"],
+      "folder": "Development/Rust/Libraries",
+      "created_at": "2024-01-16T09:15:00Z",
+      "updated_at": "2024-01-16T09:15:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440005",
+      "url": "https://serde.rs",
+      "title": "Serde - Serialization Framework",
+      "description": "A framework for serializing and deserializing Rust data structures",
+      "tags": ["rust", "serialization", "json"],
+      "folder": "Development/Rust/Libraries",
+      "created_at": "2024-01-16T09:20:00Z",
+      "updated_at": "2024-01-16T09:20:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440006",
+      "url": "https://news.ycombinator.com",
+      "title": "Hacker News",
+      "description": "Social news website focusing on computer science and entrepreneurship",
+      "tags": ["news", "tech", "community"],
+      "folder": "News/Tech",
+      "created_at": "2024-01-17T14:00:00Z",
+      "updated_at": "2024-01-17T14:00:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440007",
+      "url": "https://lobste.rs",
+      "title": "Lobsters",
+      "description": "Computing-focused community centered around link aggregation and discussion",
+      "tags": ["news", "tech", "community", "programming"],
+      "folder": "News/Tech",
+      "created_at": "2024-01-17T14:05:00Z",
+      "updated_at": "2024-01-17T14:05:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440008",
+      "url": "https://github.com",
+      "title": "GitHub",
+      "description": "Platform for version control and collaboration",
+      "tags": ["development", "git", "collaboration"],
+      "folder": null,
+      "created_at": "2024-01-10T08:00:00Z",
+      "updated_at": "2024-01-10T08:00:00Z"
+    },
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440009",
+      "url": "https://stackoverflow.com",
+      "title": "Stack Overflow",
+      "description": "Q&A platform for programmers",
+      "tags": ["programming", "q-and-a", "reference"],
+      "folder": null,
+      "created_at": "2024-01-10T08:05:00Z",
+      "updated_at": "2024-01-10T08:05:00Z"
+    }
+  ]
+}
