@@ -8,6 +8,11 @@ use fusabi_streams_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamTyp
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+use crate::sync::{ProviderSyncState, SyncManager};
+use crate::cache::Cache;
 
 /// The main JSON-RPC API interface for Scryforge.
 ///
@@ -21,17 +26,35 @@ pub trait ScryforgeApi {
     /// List items for a specific stream.
     #[method(name = "items.list")]
     async fn list_items(&self, stream_id: String) -> RpcResult<Vec<Item>>;
+
+    /// Get sync status for all providers.
+    #[method(name = "sync.status")]
+    async fn sync_status(&self) -> RpcResult<HashMap<String, ProviderSyncState>>;
+
+    /// Manually trigger a sync for a specific provider.
+    #[method(name = "sync.trigger")]
+    async fn sync_trigger(&self, provider_id: String) -> RpcResult<()>;
 }
 
 /// Implementation of the Scryforge API.
 ///
 /// Currently returns hardcoded dummy data. In Phase 2, this will
 /// delegate to the ProviderRegistry to fetch real data.
-pub struct ApiImpl;
+pub struct ApiImpl<C: Cache + 'static> {
+    sync_manager: Option<Arc<RwLock<SyncManager<C>>>>,
+}
 
-impl ApiImpl {
+impl<C: Cache + 'static> ApiImpl<C> {
     pub fn new() -> Self {
-        Self
+        Self {
+            sync_manager: None,
+        }
+    }
+
+    pub fn with_sync_manager(sync_manager: Arc<RwLock<SyncManager<C>>>) -> Self {
+        Self {
+            sync_manager: Some(sync_manager),
+        }
     }
 
     /// Generate dummy streams for testing.
@@ -249,12 +272,43 @@ impl ApiImpl {
 }
 
 #[jsonrpsee::core::async_trait]
-impl ScryforgeApiServer for ApiImpl {
+impl<C: Cache + 'static> ScryforgeApiServer for ApiImpl<C> {
     async fn list_streams(&self) -> RpcResult<Vec<Stream>> {
         Ok(Self::generate_dummy_streams())
     }
 
     async fn list_items(&self, stream_id: String) -> RpcResult<Vec<Item>> {
         Ok(Self::generate_dummy_items(&stream_id))
+    }
+
+    async fn sync_status(&self) -> RpcResult<HashMap<String, ProviderSyncState>> {
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            let states = manager.get_sync_states().await;
+            Ok(states)
+        } else {
+            // If sync manager is not available, return empty status
+            Ok(HashMap::new())
+        }
+    }
+
+    async fn sync_trigger(&self, provider_id: String) -> RpcResult<()> {
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            manager
+                .trigger_sync(&provider_id)
+                .await
+                .map_err(|e| jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Failed to trigger sync: {}", e),
+                    None::<()>,
+                ))
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Sync manager not available".to_string(),
+                None::<()>,
+            ))
+        }
     }
 }
