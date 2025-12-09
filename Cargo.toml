@@ -9,9 +9,9 @@ members = [
     "scryforge-tui",
     # Provider crates:
     "providers/provider-dummy",
+    "providers/provider-rss",
     # Future provider crates will be added here:
     # "providers/provider-email-imap",
-    # "providers/provider-rss",
     # "providers/provider-spotify",
     # "providers/provider-youtube",
     # "providers/provider-reddit",
