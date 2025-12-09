@@ -49,13 +49,13 @@
 //! RUST_LOG=debug cargo run --bin scryforge-daemon
 //! ```
 
-pub mod registry;
-
 use anyhow::Result;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
-mod api;
+// Use modules from the library crate
+use scryforge_daemon::api;
+use scryforge_daemon::registry;
 
 #[tokio::main]
 async fn main() -> Result<()> {
