@@ -10,13 +10,13 @@ members = [
     # Provider crates:
     "providers/provider-dummy",
     "providers/provider-rss",
+    "providers/provider-reddit",
+    "providers/provider-spotify",
+    "providers/provider-youtube",
+    "providers/provider-email-imap",
+    "providers/provider-bookmarks",
+    "providers/provider-mstodo",
     # Future provider crates will be added here:
-    # "providers/provider-email-imap",
-    # "providers/provider-spotify",
-    # "providers/provider-youtube",
-    # "providers/provider-reddit",
-    # "providers/provider-mstodo",
-    # "providers/provider-bookmarks",
 ]
 
 [workspace.package]

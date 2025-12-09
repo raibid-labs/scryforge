@@ -1,0 +1,30 @@
+[package]
+name = "provider-email-imap"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "IMAP email provider for Scryforge"
+
+[dependencies]
+fusabi-streams-core.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+# IMAP client
+async-imap = "0.10"
+async-native-tls = "0.5"
+async-std = { version = "1.13", features = ["attributes"] }
+futures = "0.3"
+
+# Email parsing
+mail-parser = "0.9"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
