@@ -452,6 +452,18 @@ pub trait HasCommunities: Provider {
     async fn get_community(&self, id: &CommunityId) -> Result<Community>;
 }
 
+/// Providers that support task completion operations.
+///
+/// Examples: Microsoft To Do, Todoist, Google Tasks
+#[async_trait]
+pub trait HasTasks: Provider {
+    /// Mark a task as completed.
+    async fn complete_task(&self, task_id: &str) -> Result<()>;
+
+    /// Mark a task as not completed.
+    async fn uncomplete_task(&self, task_id: &str) -> Result<()>;
+}
+
 // ============================================================================
 // Authentication Support (Optional)
 // ============================================================================
@@ -498,8 +510,8 @@ pub mod auth {
 pub mod prelude {
     pub use crate::{
         Action, ActionKind, ActionResult, Author, Collection, CollectionId, Community, CommunityId,
-        Feed, FeedId, FeedOptions, HasCollections, HasCommunities, HasFeeds, HasSavedItems, Item,
-        ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth, Result,
+        Feed, FeedId, FeedOptions, HasCollections, HasCommunities, HasFeeds, HasSavedItems, HasTasks,
+        Item, ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth, Result,
         SavedItemsOptions, Stream, StreamError, StreamId, StreamType, SyncResult,
     };
 
