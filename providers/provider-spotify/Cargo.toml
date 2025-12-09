@@ -1,0 +1,27 @@
+[package]
+name = "provider-spotify"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Spotify provider for Scryforge - playlists and library access"
+
+[dependencies]
+fusabi-streams-core.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tokio.workspace = true
+
+# HTTP client with rustls
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
+
+# Base64 encoding for auth
+base64 = "0.22"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util", "macros", "rt-multi-thread"] }
