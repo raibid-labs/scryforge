@@ -66,7 +66,10 @@ use ratatui::layout::{Constraint, Direction, Layout};
 use tokio::sync::mpsc;
 
 mod daemon_client;
+
 use daemon_client::{Command, Message, get_daemon_url, spawn_client_task};
+use scryforge_tui::command::{self, parse_command};
+use scryforge_tui::search::{self, parse_search_query};
 
 fn main() -> Result<()> {
     // Initialize logging to file
@@ -141,11 +144,18 @@ struct App {
     focused: FocusedPane,
     omnibar_input: String,
     omnibar_active: bool,
+    omnibar_mode: OmnibarMode,
     quit: bool,
     theme: Theme,
     status_message: String,
     cmd_tx: mpsc::UnboundedSender<Command>,
     daemon_connected: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OmnibarMode {
+    Search,
+    Command,
 }
 
 impl App {
@@ -158,6 +168,7 @@ impl App {
             focused: FocusedPane::StreamList,
             omnibar_input: String::new(),
             omnibar_active: false,
+            omnibar_mode: OmnibarMode::Search,
             quit: false,
             theme: Theme::default(),
             status_message: "Connecting to daemon...".to_string(),
@@ -194,9 +205,20 @@ impl App {
                 }
                 self.status_message = format!("Loaded {} items", count);
             }
+            Message::SearchResults(items) => {
+                let count = items.len();
+                self.items = items;
+                self.item_state = ListState::new(count);
+                if count > 0 {
+                    self.item_state.select_first();
+                }
+                self.status_message = format!("Found {} items", count);
+            }
+            Message::SyncTriggered => {
+                self.status_message = "Sync triggered successfully".to_string();
+            }
             Message::Error(err) => {
                 self.status_message = format!("Error: {}", err);
-                self.daemon_connected = false;
             }
             Message::Disconnected => {
                 self.status_message = "Disconnected from daemon".to_string();
@@ -277,8 +299,7 @@ impl AppState for App {
                             self.omnibar_input.clear();
                         }
                         KeyCode::Enter => {
-                            // TODO: Execute search/command
-                            self.status_message = format!("Search: {}", self.omnibar_input);
+                            self.execute_omnibar_input();
                             self.omnibar_active = false;
                             self.omnibar_input.clear();
                         }
@@ -299,11 +320,14 @@ impl AppState for App {
                         self.quit = true;
                         return false;
                     }
-                    KeyCode::Char('/') | KeyCode::Char(':') => {
+                    KeyCode::Char('/') => {
                         self.omnibar_active = true;
-                        if key.code == KeyCode::Char(':') {
-                            self.omnibar_input.push(':');
-                        }
+                        self.omnibar_mode = OmnibarMode::Search;
+                    }
+                    KeyCode::Char(':') => {
+                        self.omnibar_active = true;
+                        self.omnibar_mode = OmnibarMode::Command;
+                        self.omnibar_input.push(':');
                     }
                     KeyCode::Tab | KeyCode::Char('l') => {
                         self.focused = self.focused.next();
@@ -412,6 +436,108 @@ impl App {
             if let Some(stream) = self.streams.get(idx) {
                 let _ = self.cmd_tx.send(Command::FetchItems(stream.id.as_str().to_string()));
                 self.status_message = format!("Loading items for {}...", stream.name);
+            }
+        }
+    }
+
+    fn execute_omnibar_input(&mut self) {
+        match self.omnibar_mode {
+            OmnibarMode::Search => {
+                self.execute_search();
+            }
+            OmnibarMode::Command => {
+                self.execute_command();
+            }
+        }
+    }
+
+    fn execute_search(&mut self) {
+        let query = parse_search_query(&self.omnibar_input);
+
+        // Build filters JSON
+        let mut filters = serde_json::Map::new();
+
+        if let Some(ref stream_id) = query.stream_filter {
+            filters.insert("stream_id".to_string(), serde_json::Value::String(stream_id.clone()));
+        }
+
+        if let Some(ref content_type) = query.type_filter {
+            let type_str = match content_type {
+                search::ContentTypeFilter::Article => "Article",
+                search::ContentTypeFilter::Email => "Email",
+                search::ContentTypeFilter::Video => "Video",
+                search::ContentTypeFilter::Track => "Track",
+                search::ContentTypeFilter::Task => "Task",
+                search::ContentTypeFilter::Event => "Event",
+                search::ContentTypeFilter::Bookmark => "Bookmark",
+            };
+            filters.insert("content_type".to_string(), serde_json::Value::String(type_str.to_string()));
+        }
+
+        for status_filter in &query.status_filters {
+            match status_filter {
+                search::StatusFilter::Read => {
+                    filters.insert("is_read".to_string(), serde_json::Value::Bool(true));
+                }
+                search::StatusFilter::Unread => {
+                    filters.insert("is_read".to_string(), serde_json::Value::Bool(false));
+                }
+                search::StatusFilter::Saved => {
+                    filters.insert("is_saved".to_string(), serde_json::Value::Bool(true));
+                }
+            }
+        }
+
+        let filters_value = if filters.is_empty() {
+            None
+        } else {
+            Some(serde_json::Value::Object(filters))
+        };
+
+        let _ = self.cmd_tx.send(Command::Search {
+            query: query.text.clone(),
+            filters: filters_value,
+        });
+
+        self.status_message = format!("Searching for: {}", self.omnibar_input);
+    }
+
+    fn execute_command(&mut self) {
+        match parse_command(&self.omnibar_input) {
+            Ok(cmd) => {
+                match cmd {
+                    command::Command::Quit => {
+                        self.quit = true;
+                    }
+                    command::Command::Sync { provider_id } => {
+                        let msg = if let Some(ref id) = provider_id {
+                            format!("Triggering sync for provider: {}", id)
+                        } else {
+                            "Triggering sync for all providers".to_string()
+                        };
+                        let _ = self.cmd_tx.send(Command::TriggerSync { provider_id });
+                        self.status_message = msg;
+                    }
+                    command::Command::Refresh => {
+                        // Refresh current view by re-fetching items
+                        if let Some(idx) = self.stream_state.selected {
+                            if let Some(stream) = self.streams.get(idx) {
+                                let _ = self.cmd_tx.send(Command::FetchItems(stream.id.as_str().to_string()));
+                                self.status_message = "Refreshing...".to_string();
+                            }
+                        } else {
+                            // Refresh streams list
+                            let _ = self.cmd_tx.send(Command::FetchStreams);
+                            self.status_message = "Refreshing streams...".to_string();
+                        }
+                    }
+                    command::Command::Help => {
+                        self.status_message = "Commands: :quit :sync [provider] :refresh :help | Search: /query is:unread type:article in:stream".to_string();
+                    }
+                }
+            }
+            Err(e) => {
+                self.status_message = format!("Command error: {}", e);
             }
         }
     }

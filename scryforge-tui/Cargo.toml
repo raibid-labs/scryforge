@@ -7,6 +7,10 @@ repository.workspace = true
 authors.workspace = true
 description = "The Scryforge TUI client - terminal interface for browsing information streams"
 
+[lib]
+name = "scryforge_tui"
+path = "src/lib.rs"
+
 [[bin]]
 name = "scryforge-tui"
 path = "src/main.rs"

@@ -18,6 +18,13 @@ pub enum Command {
     FetchStreams,
     /// Fetch items for a specific stream
     FetchItems(String),
+    /// Search for items with query and filters
+    Search {
+        query: String,
+        filters: Option<serde_json::Value>,
+    },
+    /// Trigger sync for a provider
+    TriggerSync { provider_id: Option<String> },
     /// Shutdown the client
     Shutdown,
 }
@@ -29,6 +36,10 @@ pub enum Message {
     StreamsLoaded(Vec<Stream>),
     /// Items were loaded successfully
     ItemsLoaded(Vec<Item>),
+    /// Search results were loaded successfully
+    SearchResults(Vec<Item>),
+    /// Sync was triggered successfully
+    SyncTriggered,
     /// An error occurred
     Error(String),
     /// Client is ready
@@ -83,6 +94,33 @@ impl DaemonClient {
 
         debug!("Fetched {} items for stream {}", items.len(), stream_id);
         Ok(items)
+    }
+
+    /// Search for items.
+    pub async fn search(&self, query: &str, filters: Option<serde_json::Value>) -> Result<Vec<Item>> {
+        debug!("Searching for items with query: {}", query);
+
+        let items: Vec<Item> = self
+            .client
+            .request("search.query", rpc_params![query, filters])
+            .await
+            .context("Failed to search items")?;
+
+        debug!("Found {} items matching query", items.len());
+        Ok(items)
+    }
+
+    /// Trigger sync for a provider.
+    pub async fn trigger_sync(&self, provider_id: &str) -> Result<()> {
+        debug!("Triggering sync for provider: {}", provider_id);
+
+        self.client
+            .request::<(), _>("sync.trigger", rpc_params![provider_id])
+            .await
+            .context("Failed to trigger sync")?;
+
+        debug!("Sync triggered successfully");
+        Ok(())
     }
 }
 
@@ -143,6 +181,29 @@ pub fn spawn_client_task(
                         Err(e) => {
                             error!("Failed to fetch items: {}", e);
                             let _ = msg_tx.send(Message::Error(format!("Failed to fetch items: {}", e)));
+                        }
+                    }
+                }
+                Command::Search { query, filters } => {
+                    match client.search(&query, filters).await {
+                        Ok(items) => {
+                            let _ = msg_tx.send(Message::SearchResults(items));
+                        }
+                        Err(e) => {
+                            error!("Failed to search: {}", e);
+                            let _ = msg_tx.send(Message::Error(format!("Failed to search: {}", e)));
+                        }
+                    }
+                }
+                Command::TriggerSync { provider_id } => {
+                    let provider_id = provider_id.unwrap_or_else(|| "all".to_string());
+                    match client.trigger_sync(&provider_id).await {
+                        Ok(()) => {
+                            let _ = msg_tx.send(Message::SyncTriggered);
+                        }
+                        Err(e) => {
+                            error!("Failed to trigger sync: {}", e);
+                            let _ = msg_tx.send(Message::Error(format!("Failed to trigger sync: {}", e)));
                         }
                     }
                 }

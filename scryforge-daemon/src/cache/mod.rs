@@ -65,6 +65,24 @@ pub trait Cache: Send + Sync {
 
     /// Update the last sync timestamp for a provider.
     fn update_sync_state(&self, provider_id: &str, last_sync: DateTime<Utc>) -> Result<()>;
+
+    /// Search for items matching a query and optional filters.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search text (searched in title, content)
+    /// * `stream_id` - Optional stream ID to filter by
+    /// * `content_type` - Optional content type to filter by
+    /// * `is_read` - Optional read status filter
+    /// * `is_saved` - Optional saved status filter
+    fn search_items(
+        &self,
+        query: &str,
+        stream_id: Option<&str>,
+        content_type: Option<&str>,
+        is_read: Option<bool>,
+        is_saved: Option<bool>,
+    ) -> Result<Vec<Item>>;
 }
 
 // ============================================================================
@@ -609,6 +627,77 @@ impl Cache for SqliteCache {
 
         Ok(())
     }
+
+    fn search_items(
+        &self,
+        query: &str,
+        stream_id: Option<&str>,
+        content_type: Option<&str>,
+        is_read: Option<bool>,
+        is_saved: Option<bool>,
+    ) -> Result<Vec<Item>> {
+        let conn = self.conn.lock().unwrap();
+
+        // Build the query dynamically based on filters
+        let mut sql = String::from(
+            "SELECT id, stream_id, title, content_type, content_data,
+                    author_name, author_email, author_url, author_avatar_url,
+                    published, updated, url, thumbnail_url, is_read, is_saved,
+                    tags, metadata
+             FROM items
+             WHERE 1=1"
+        );
+
+        let mut params_vec: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
+
+        // Add search query filter (search in title and serialized content)
+        if !query.is_empty() {
+            sql.push_str(" AND (title LIKE ? OR content_data LIKE ?)");
+            let search_pattern = format!("%{}%", query);
+            params_vec.push(Box::new(search_pattern.clone()));
+            params_vec.push(Box::new(search_pattern));
+        }
+
+        // Add stream filter
+        if let Some(stream) = stream_id {
+            sql.push_str(" AND stream_id = ?");
+            params_vec.push(Box::new(stream.to_string()));
+        }
+
+        // Add content type filter
+        if let Some(ctype) = content_type {
+            sql.push_str(" AND content_type = ?");
+            params_vec.push(Box::new(ctype.to_string()));
+        }
+
+        // Add is_read filter
+        if let Some(read_status) = is_read {
+            sql.push_str(" AND is_read = ?");
+            params_vec.push(Box::new(read_status as i32));
+        }
+
+        // Add is_saved filter
+        if let Some(saved_status) = is_saved {
+            sql.push_str(" AND is_saved = ?");
+            params_vec.push(Box::new(saved_status as i32));
+        }
+
+        // Order by published date, newest first
+        sql.push_str(" ORDER BY published DESC, created_at DESC LIMIT 100");
+
+        let mut stmt = conn.prepare(&sql)?;
+
+        // Convert params to references for query_map
+        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec
+            .iter()
+            .map(|p| p.as_ref() as &dyn rusqlite::ToSql)
+            .collect();
+
+        let items = stmt.query_map(params_refs.as_slice(), Self::row_to_item)?;
+
+        items.collect::<std::result::Result<Vec<_>, _>>()
+            .context("Failed to search items from cache")
+    }
 }
 
 // Helper methods for SqliteCache
@@ -1122,6 +1211,105 @@ mod tests {
         // Items should also be deleted due to CASCADE
         let items = cache.get_items(&stream.id, None)?;
         assert_eq!(items.len(), 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_items_by_text() -> Result<()> {
+        let cache = create_test_cache()?;
+
+        let stream = create_test_stream("test:feed:1", "test-provider");
+        cache.upsert_streams(&[stream.clone()])?;
+
+        let mut item1 = create_test_item("test:item:1", "test:feed:1");
+        item1.title = "Rust programming tutorial".to_string();
+
+        let mut item2 = create_test_item("test:item:2", "test:feed:1");
+        item2.title = "Python machine learning".to_string();
+
+        let mut item3 = create_test_item("test:item:3", "test:feed:1");
+        item3.title = "Advanced Rust patterns".to_string();
+
+        cache.upsert_items(&[item1, item2, item3])?;
+
+        // Search for "Rust"
+        let results = cache.search_items("Rust", None, None, None, None)?;
+        assert_eq!(results.len(), 2);
+
+        // Search for "Python"
+        let results = cache.search_items("Python", None, None, None, None)?;
+        assert_eq!(results.len(), 1);
+
+        // Search for non-existent term
+        let results = cache.search_items("JavaScript", None, None, None, None)?;
+        assert_eq!(results.len(), 0);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_items_with_filters() -> Result<()> {
+        let cache = create_test_cache()?;
+
+        let stream1 = create_test_stream("test:feed:1", "test-provider");
+        let stream2 = create_test_stream("test:feed:2", "test-provider");
+        cache.upsert_streams(&[stream1.clone(), stream2.clone()])?;
+
+        let mut item1 = create_test_item("test:item:1", "test:feed:1");
+        item1.title = "Test article".to_string();
+        item1.is_read = false;
+        item1.is_saved = false;
+
+        let mut item2 = create_test_item("test:item:2", "test:feed:1");
+        item2.title = "Another test".to_string();
+        item2.is_read = true;
+        item2.is_saved = false;
+
+        let mut item3 = create_test_item("test:item:3", "test:feed:2");
+        item3.title = "Test item".to_string();
+        item3.is_read = false;
+        item3.is_saved = true;
+
+        cache.upsert_items(&[item1, item2, item3])?;
+
+        // Search for unread items
+        let results = cache.search_items("test", None, None, Some(false), None)?;
+        assert_eq!(results.len(), 2);
+
+        // Search for read items
+        let results = cache.search_items("test", None, None, Some(true), None)?;
+        assert_eq!(results.len(), 1);
+
+        // Search for saved items
+        let results = cache.search_items("test", None, None, None, Some(true))?;
+        assert_eq!(results.len(), 1);
+
+        // Search within specific stream
+        let results = cache.search_items("test", Some("test:feed:1"), None, None, None)?;
+        assert_eq!(results.len(), 2);
+
+        let results = cache.search_items("test", Some("test:feed:2"), None, None, None)?;
+        assert_eq!(results.len(), 1);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_search_items_empty_query() -> Result<()> {
+        let cache = create_test_cache()?;
+
+        let stream = create_test_stream("test:feed:1", "test-provider");
+        cache.upsert_streams(&[stream.clone()])?;
+
+        let item1 = create_test_item("test:item:1", "test:feed:1");
+        let item2 = create_test_item("test:item:2", "test:feed:1");
+
+        cache.upsert_items(&[item1, item2])?;
+
+        // Empty query should return all items (up to limit)
+        let results = cache.search_items("", None, None, None, None)?;
+        assert_eq!(results.len(), 2);
 
         Ok(())
     }

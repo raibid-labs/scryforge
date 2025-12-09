@@ -14,6 +14,9 @@ use tokio::sync::RwLock;
 use crate::sync::{ProviderSyncState, SyncManager};
 use crate::cache::Cache;
 
+// Re-export search types for use in TUI
+pub use serde_json::Value as JsonValue;
+
 /// The main JSON-RPC API interface for Scryforge.
 ///
 /// This trait defines all available RPC methods that clients can call.
@@ -34,6 +37,19 @@ pub trait ScryforgeApi {
     /// Manually trigger a sync for a specific provider.
     #[method(name = "sync.trigger")]
     async fn sync_trigger(&self, provider_id: String) -> RpcResult<()>;
+
+    /// Search items across all streams or within a specific stream.
+    ///
+    /// # Arguments
+    ///
+    /// * `query` - The search query text
+    /// * `filters` - Optional JSON object with filters:
+    ///   - `stream_id`: Filter by specific stream
+    ///   - `content_type`: Filter by content type (e.g., "article", "email")
+    ///   - `is_read`: Filter by read status (boolean)
+    ///   - `is_saved`: Filter by saved status (boolean)
+    #[method(name = "search.query")]
+    async fn search_query(&self, query: String, filters: Option<JsonValue>) -> RpcResult<Vec<Item>>;
 }
 
 /// Implementation of the Scryforge API.
@@ -42,18 +58,35 @@ pub trait ScryforgeApi {
 /// delegate to the ProviderRegistry to fetch real data.
 pub struct ApiImpl<C: Cache + 'static> {
     sync_manager: Option<Arc<RwLock<SyncManager<C>>>>,
+    cache: Option<Arc<C>>,
 }
 
 impl<C: Cache + 'static> ApiImpl<C> {
     pub fn new() -> Self {
         Self {
             sync_manager: None,
+            cache: None,
         }
     }
 
     pub fn with_sync_manager(sync_manager: Arc<RwLock<SyncManager<C>>>) -> Self {
         Self {
             sync_manager: Some(sync_manager),
+            cache: None,
+        }
+    }
+
+    pub fn with_cache(cache: Arc<C>) -> Self {
+        Self {
+            sync_manager: None,
+            cache: Some(cache),
+        }
+    }
+
+    pub fn with_sync_manager_and_cache(sync_manager: Arc<RwLock<SyncManager<C>>>, cache: Arc<C>) -> Self {
+        Self {
+            sync_manager: Some(sync_manager),
+            cache: Some(cache),
         }
     }
 
@@ -309,6 +342,51 @@ impl<C: Cache + 'static> ScryforgeApiServer for ApiImpl<C> {
                 "Sync manager not available".to_string(),
                 None::<()>,
             ))
+        }
+    }
+
+    async fn search_query(&self, query: String, filters: Option<JsonValue>) -> RpcResult<Vec<Item>> {
+        // If cache is available, use it for search
+        if let Some(ref cache) = self.cache {
+            // Parse filters from JSON
+            let mut stream_id: Option<String> = None;
+            let mut content_type: Option<String> = None;
+            let mut is_read: Option<bool> = None;
+            let mut is_saved: Option<bool> = None;
+
+            if let Some(filter_obj) = filters {
+                if let Some(stream) = filter_obj.get("stream_id").and_then(|v| v.as_str()) {
+                    stream_id = Some(stream.to_string());
+                }
+                if let Some(ctype) = filter_obj.get("content_type").and_then(|v| v.as_str()) {
+                    content_type = Some(ctype.to_string());
+                }
+                if let Some(read) = filter_obj.get("is_read").and_then(|v| v.as_bool()) {
+                    is_read = Some(read);
+                }
+                if let Some(saved) = filter_obj.get("is_saved").and_then(|v| v.as_bool()) {
+                    is_saved = Some(saved);
+                }
+            }
+
+            // Perform search
+            cache
+                .search_items(
+                    &query,
+                    stream_id.as_deref(),
+                    content_type.as_deref(),
+                    is_read,
+                    is_saved,
+                )
+                .map_err(|e| jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Search failed: {}", e),
+                    None::<()>,
+                ))
+        } else {
+            // If no cache available, return empty results or dummy data
+            // In production, this would search the dummy data
+            Ok(Vec::new())
         }
     }
 }
