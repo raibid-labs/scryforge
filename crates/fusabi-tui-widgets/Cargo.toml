@@ -11,7 +11,7 @@ description = "Reusable TUI widgets for Fusabi applications (stream list, item l
 scryforge-provider-core.workspace = true
 fusabi-tui-core.workspace = true
 ratatui.workspace = true
+chrono.workspace = true
 
 [dev-dependencies]
 uuid.workspace = true
-chrono.workspace = true

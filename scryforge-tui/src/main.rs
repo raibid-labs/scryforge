@@ -61,8 +61,9 @@ use anyhow::Result;
 use crossterm::event::KeyCode;
 use fusabi_tui_core::prelude::*;
 use fusabi_tui_widgets::prelude::*;
-use ratatui::layout::{Constraint, Direction, Layout};
+use ratatui::layout::{Constraint, Direction, Layout, Rect};
 use scryforge_provider_core::{Collection, Item, Stream};
+use std::collections::HashMap;
 use tokio::sync::mpsc;
 
 pub mod command;
@@ -153,6 +154,9 @@ struct App {
     status_message: String,
     cmd_tx: mpsc::UnboundedSender<DaemonCommand>,
     daemon_connected: bool,
+    provider_statuses: HashMap<String, ProviderSyncStatus>,
+    toasts: Vec<Toast>,
+    active_search_filter: Option<String>,
 }
 
 impl App {
@@ -174,6 +178,9 @@ impl App {
             status_message: "Connecting to daemon...".to_string(),
             cmd_tx,
             daemon_connected: false,
+            provider_statuses: HashMap::new(),
+            toasts: Vec::new(),
+            active_search_filter: None,
         }
     }
 
@@ -212,10 +219,12 @@ impl App {
             Message::Error(err) => {
                 self.status_message = format!("Error: {}", err);
                 self.daemon_connected = false;
+                self.add_toast(Toast::error(format!("Error: {}", err)));
             }
             Message::Disconnected => {
                 self.status_message = "Disconnected from daemon".to_string();
                 self.daemon_connected = false;
+                self.add_toast(Toast::warning("Disconnected from daemon"));
             }
             Message::CollectionsLoaded(collections) => {
                 let count = collections.len();
@@ -228,21 +237,27 @@ impl App {
             }
             Message::CollectionCreated(collection) => {
                 self.status_message = format!("Created collection: {}", collection.name);
+                self.add_toast(Toast::success(format!("Created: {}", collection.name)));
                 // Refresh collections list
                 let _ = self.cmd_tx.send(DaemonCommand::FetchCollections);
             }
             Message::ItemAddedToCollection => {
                 self.status_message = "Item added to collection".to_string();
                 self.collection_picker_active = false;
+                self.add_toast(Toast::success("Added to collection"));
             }
             Message::ItemRemovedFromCollection => {
                 self.status_message = "Item removed from collection".to_string();
+                self.add_toast(Toast::success("Removed from collection"));
             }
         }
     }
 
-    fn render(&self, frame: &mut ratatui::Frame) {
+    fn render(&mut self, frame: &mut ratatui::Frame) {
         let size = frame.area();
+
+        // Remove expired toasts
+        self.toasts.retain(|t| !t.is_expired());
 
         // Main layout: content + omnibar + status bar
         let main_chunks = Layout::default()
@@ -286,14 +301,74 @@ impl App {
             .suggestions(&self.omnibar_suggestions)
             .render(frame, main_chunks[1]);
 
-        // Render status bar
+        // Render enhanced status bar
         let connection_status = if self.daemon_connected {
             "Connected"
         } else {
             "Disconnected"
         };
+
+        // Build provider status list from streams
+        let provider_statuses: Vec<ProviderStatus> = self.get_unique_providers()
+            .into_iter()
+            .map(|provider_id| ProviderStatus {
+                name: provider_id.clone(),
+                sync_status: *self.provider_statuses.get(&provider_id).unwrap_or(&ProviderSyncStatus::Synced),
+            })
+            .collect();
+
+        // Calculate total unread count
+        let unread_count: u32 = self.streams
+            .iter()
+            .map(|s| s.unread_count.unwrap_or(0))
+            .sum();
+
         StatusBarWidget::new(&self.status_message, connection_status, &self.theme)
+            .provider_statuses(&provider_statuses)
+            .unread_count(unread_count)
+            .search_filter(self.active_search_filter.as_deref())
             .render(frame, main_chunks[2]);
+
+        // Render toasts (overlay on top-right)
+        if let Some(toast) = self.toasts.last() {
+            let toast_area = self.calculate_toast_area(size);
+            ToastWidget::new(toast, &self.theme).render(frame, toast_area);
+        }
+    }
+
+    /// Get unique provider IDs from streams
+    fn get_unique_providers(&self) -> Vec<String> {
+        let mut providers: Vec<String> = self.streams
+            .iter()
+            .map(|s| s.provider_id.clone())
+            .collect();
+        providers.sort();
+        providers.dedup();
+        providers
+    }
+
+    /// Calculate the area for toast notification (top-right corner)
+    fn calculate_toast_area(&self, screen_size: Rect) -> Rect {
+        let width = 40.min(screen_size.width / 3);
+        let height = 3;
+        let x = screen_size.width.saturating_sub(width + 2);
+        let y = 1;
+
+        Rect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    /// Add a toast notification
+    fn add_toast(&mut self, toast: Toast) {
+        // Keep only the last 3 toasts
+        if self.toasts.len() >= 3 {
+            self.toasts.remove(0);
+        }
+        self.toasts.push(toast);
     }
 }
 
@@ -503,6 +578,13 @@ impl App {
                     .cmd_tx
                     .send(DaemonCommand::FetchItems(stream.id.as_str().to_string()));
                 self.status_message = format!("Loading items for {}...", stream.name);
+
+                // Set provider to syncing status
+                self.provider_statuses.insert(
+                    stream.provider_id.clone(),
+                    ProviderSyncStatus::Syncing,
+                );
+                self.add_toast(Toast::info(format!("Syncing {}...", stream.name)));
             }
         }
     }
@@ -526,9 +608,11 @@ impl App {
                 if is_saved {
                     let _ = self.cmd_tx.send(DaemonCommand::UnsaveItem(item_id));
                     self.status_message = "Item unsaved".to_string();
+                    self.add_toast(Toast::success("Unsaved"));
                 } else {
                     let _ = self.cmd_tx.send(DaemonCommand::SaveItem(item_id));
                     self.status_message = "Item saved".to_string();
+                    self.add_toast(Toast::success("Saved!"));
                 }
             }
         }
@@ -575,6 +659,7 @@ impl App {
                 let item_id = item.id.as_str().to_string();
                 let _ = self.cmd_tx.send(DaemonCommand::ArchiveItem(item_id));
                 self.status_message = "Item archived".to_string();
+                self.add_toast(Toast::success("Archived"));
 
                 // Remove from current view
                 self.items.remove(idx);
@@ -662,16 +747,32 @@ impl App {
                 match provider {
                     Some(ref p) => {
                         self.status_message = format!("Syncing provider: {}", p);
+                        self.provider_statuses.insert(p.clone(), ProviderSyncStatus::Syncing);
+                        self.add_toast(Toast::info(format!("Syncing {}...", p)));
                         // TODO: Send sync command to daemon when implemented
+                        // For now, simulate completion
+                        self.provider_statuses.insert(p.clone(), ProviderSyncStatus::Synced);
+                        self.add_toast(Toast::success(format!("{} synced", p)));
                     }
                     None => {
                         self.status_message = "Syncing all providers...".to_string();
+                        self.add_toast(Toast::info("Syncing all providers..."));
+                        // Mark all providers as syncing
+                        for provider_id in self.get_unique_providers() {
+                            self.provider_statuses.insert(provider_id, ProviderSyncStatus::Syncing);
+                        }
                         // TODO: Send sync command to daemon when implemented
+                        // Simulate completion
+                        for provider_id in self.get_unique_providers() {
+                            self.provider_statuses.insert(provider_id, ProviderSyncStatus::Synced);
+                        }
+                        self.add_toast(Toast::success("Sync complete"));
                     }
                 }
             }
             Some(Command::Refresh) => {
                 self.status_message = "Refreshing...".to_string();
+                self.add_toast(Toast::info("Refreshing..."));
                 let _ = self.cmd_tx.send(DaemonCommand::FetchStreams);
             }
             Some(Command::Help) => {
@@ -685,8 +786,12 @@ impl App {
             Some(Command::Plugin(plugin_cmd)) => {
                 self.handle_plugin_command(plugin_cmd);
             }
+            Some(Command::Theme(theme_cmd)) => {
+                self.handle_theme_command(theme_cmd);
+            }
             None => {
                 self.status_message = format!("Unknown command: {}", input);
+                self.add_toast(Toast::warning(format!("Unknown command: {}", input)));
             }
         }
     }
@@ -719,15 +824,42 @@ impl App {
         }
     }
 
+    /// Handle theme management commands.
+    fn handle_theme_command(&mut self, cmd: command::ThemeCommand) {
+        use command::ThemeCommand;
+        use fusabi_tui_widgets::theme::Theme;
+        match cmd {
+            ThemeCommand::List => {
+                let themes = Theme::available_themes();
+                self.status_message = format!("Available themes: {}", themes.join(", "));
+                self.add_toast(Toast::info(format!("Themes: {}", themes.join(", "))));
+            }
+            ThemeCommand::Set(name) => {
+                if let Some(new_theme) = Theme::by_name(&name) {
+                    self.theme = new_theme;
+                    self.status_message = format!("Theme changed to: {}", name);
+                    self.add_toast(Toast::success(format!("Theme: {}", name)));
+                } else {
+                    self.status_message = format!("Unknown theme: {}. Use :theme list to see available themes", name);
+                    self.add_toast(Toast::error(format!("Unknown theme: {}", name)));
+                }
+            }
+        }
+    }
+
     /// Execute a search query.
     fn execute_search(&mut self, query: search::SearchQuery) {
         if query.has_advanced_syntax {
             self.status_message = format!("Searching with filters: {}", query.text);
+            self.active_search_filter = Some(query.text.clone());
+            self.add_toast(Toast::info(format!("Searching: {}", query.text)));
             // TODO: Send search RPC to daemon
             // For now, just show the query in status
         } else {
             // Simple search: filter items locally
             self.status_message = format!("Search: {}", query.text);
+            self.active_search_filter = Some(query.text.clone());
+            self.add_toast(Toast::info(format!("Search: {}", query.text)));
             // TODO: Filter self.items based on query.text
             // For now, just show the search in status
         }

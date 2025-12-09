@@ -11,6 +11,8 @@
 //! - `:sync <provider>` - Sync a specific provider
 //! - `:refresh` or `:r` - Refresh the current view
 //! - `:help` or `:h` - Show help information
+//! - `:theme <name>` - Switch to a named theme
+//! - `:theme list` - List available themes
 //! - `:plugin list` - List all loaded plugins
 //! - `:plugin enable <id>` - Enable a plugin
 //! - `:plugin disable <id>` - Disable a plugin
@@ -33,6 +35,8 @@ pub enum Command {
     Search(SearchQuery),
     /// Plugin management commands
     Plugin(PluginCommand),
+    /// Theme management commands
+    Theme(ThemeCommand),
 }
 
 /// Plugin management subcommands.
@@ -48,6 +52,15 @@ pub enum PluginCommand {
     Info(String),
     /// Reload plugins from disk
     Reload,
+}
+
+/// Theme management subcommands.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThemeCommand {
+    /// List available themes
+    List,
+    /// Set a specific theme by name
+    Set(String),
 }
 
 /// Parse a command or search query from omnibar input.
@@ -121,6 +134,7 @@ fn parse_command_string(cmd_str: &str) -> Option<Command> {
         "refresh" | "r" => Some(Command::Refresh),
         "help" | "h" => Some(Command::Help),
         "plugin" | "plugins" => parse_plugin_command(args),
+        "theme" | "themes" => parse_theme_command(args),
         _ => None, // Unknown command
     }
 }
@@ -163,6 +177,25 @@ fn parse_plugin_command(args: &[&str]) -> Option<Command> {
     }
 }
 
+/// Parse theme subcommands.
+fn parse_theme_command(args: &[&str]) -> Option<Command> {
+    if args.is_empty() {
+        // Default to listing themes
+        return Some(Command::Theme(ThemeCommand::List));
+    }
+
+    let subcommand = args[0].to_lowercase();
+    let _subargs = &args[1..];
+
+    match subcommand.as_str() {
+        "list" | "ls" => Some(Command::Theme(ThemeCommand::List)),
+        _ => {
+            // If not "list", treat the first arg as a theme name
+            Some(Command::Theme(ThemeCommand::Set(args.join(" "))))
+        }
+    }
+}
+
 /// Get help text for available commands.
 pub fn get_help_text() -> &'static str {
     "Available Commands:\n\
@@ -170,6 +203,8 @@ pub fn get_help_text() -> &'static str {
      :sync [provider]    - Sync all providers or a specific provider\n\
      :refresh, :r        - Refresh the current view\n\
      :help, :h           - Show this help\n\
+     :theme <name>       - Switch to a theme (default, light, dracula, gruvbox, nord, solarized-dark, monokai)\n\
+     :theme list         - List available themes\n\
      \n\
      Plugin Commands:\n\
      :plugin list        - List all loaded plugins\n\
@@ -222,6 +257,14 @@ pub fn get_command_suggestions(partial: &str) -> Vec<String> {
         (":r", "Refresh (short)"),
         (":help", "Show help"),
         (":h", "Help (short)"),
+        (":theme list", "List available themes"),
+        (":theme default", "Switch to default theme"),
+        (":theme light", "Switch to light theme"),
+        (":theme dracula", "Switch to Dracula theme"),
+        (":theme gruvbox", "Switch to Gruvbox theme"),
+        (":theme nord", "Switch to Nord theme"),
+        (":theme solarized-dark", "Switch to Solarized Dark theme"),
+        (":theme monokai", "Switch to Monokai theme"),
         (":plugin list", "List loaded plugins"),
         (":plugin enable <id>", "Enable a plugin"),
         (":plugin disable <id>", "Disable a plugin"),
@@ -275,6 +318,26 @@ mod tests {
     fn test_parse_help_commands() {
         assert_eq!(parse_command(":help"), Some(Command::Help));
         assert_eq!(parse_command(":h"), Some(Command::Help));
+    }
+
+    #[test]
+    fn test_parse_theme_commands() {
+        assert_eq!(
+            parse_command(":theme list"),
+            Some(Command::Theme(ThemeCommand::List))
+        );
+        assert_eq!(
+            parse_command(":theme"),
+            Some(Command::Theme(ThemeCommand::List))
+        );
+        assert_eq!(
+            parse_command(":theme dracula"),
+            Some(Command::Theme(ThemeCommand::Set("dracula".to_string())))
+        );
+        assert_eq!(
+            parse_command(":theme gruvbox"),
+            Some(Command::Theme(ThemeCommand::Set("gruvbox".to_string())))
+        );
     }
 
     #[test]
@@ -335,6 +398,10 @@ mod tests {
         let suggestions = get_command_suggestions(":h");
         assert!(suggestions.iter().any(|s| s.contains(":help")));
         assert!(suggestions.iter().any(|s| s.contains(":h ")));
+
+        let suggestions = get_command_suggestions(":theme");
+        assert!(suggestions.iter().any(|s| s.contains(":theme list")));
+        assert!(suggestions.iter().any(|s| s.contains(":theme dracula")));
     }
 
     #[test]
@@ -357,6 +424,7 @@ mod tests {
         assert!(help.contains("sync"));
         assert!(help.contains("refresh"));
         assert!(help.contains("help"));
+        assert!(help.contains("theme"));
         assert!(help.contains("plugin"));
     }
 

@@ -31,3 +31,4 @@ toml = "0.8"
 
 [dev-dependencies]
 tempfile = "3.8"
+jsonrpsee = { version = "0.24", features = ["client-core", "async-client", "http-client"] }
