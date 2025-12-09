@@ -59,15 +59,17 @@
 
 use anyhow::Result;
 use crossterm::event::KeyCode;
-use scryforge_provider_core::{Item, Stream};
 use fusabi_tui_core::prelude::*;
 use fusabi_tui_widgets::prelude::*;
 use ratatui::layout::{Constraint, Direction, Layout};
+use scryforge_provider_core::{Collection, Item, Stream};
 use tokio::sync::mpsc;
 
+pub mod command;
 mod daemon_client;
 pub mod search;
-use daemon_client::{Command, Message, get_daemon_url, spawn_client_task};
+use daemon_client::{get_daemon_url, spawn_client_task};
+use daemon_client::{Command as DaemonCommand, Message};
 
 fn main() -> Result<()> {
     // Initialize logging to file
@@ -97,7 +99,7 @@ async fn async_main() -> Result<()> {
     let mut app = App::new(cmd_tx.clone());
 
     // Request initial data from daemon
-    let _ = cmd_tx.send(Command::FetchStreams);
+    let _ = cmd_tx.send(DaemonCommand::FetchStreams);
 
     // Main event loop
     loop {
@@ -124,7 +126,7 @@ async fn async_main() -> Result<()> {
     }
 
     // Send shutdown command to daemon client
-    let _ = cmd_tx.send(Command::Shutdown);
+    let _ = cmd_tx.send(DaemonCommand::Shutdown);
 
     // Cleanup handled by TerminalWrapper::Drop
     Ok(())
@@ -137,28 +139,36 @@ async fn async_main() -> Result<()> {
 struct App {
     streams: Vec<Stream>,
     items: Vec<Item>,
+    collections: Vec<Collection>,
     stream_state: ListState,
     item_state: ListState,
+    collection_state: ListState,
     focused: FocusedPane,
     omnibar_input: String,
     omnibar_active: bool,
+    omnibar_suggestions: Vec<String>,
+    collection_picker_active: bool,
     quit: bool,
     theme: Theme,
     status_message: String,
-    cmd_tx: mpsc::UnboundedSender<Command>,
+    cmd_tx: mpsc::UnboundedSender<DaemonCommand>,
     daemon_connected: bool,
 }
 
 impl App {
-    fn new(cmd_tx: mpsc::UnboundedSender<Command>) -> Self {
+    fn new(cmd_tx: mpsc::UnboundedSender<DaemonCommand>) -> Self {
         Self {
             streams: Vec::new(),
             items: Vec::new(),
+            collections: Vec::new(),
             stream_state: ListState::new(0),
             item_state: ListState::new(0),
+            collection_state: ListState::new(0),
             focused: FocusedPane::StreamList,
             omnibar_input: String::new(),
             omnibar_active: false,
+            omnibar_suggestions: Vec::new(),
+            collection_picker_active: false,
             quit: false,
             theme: Theme::default(),
             status_message: "Connecting to daemon...".to_string(),
@@ -181,7 +191,9 @@ impl App {
                     self.stream_state.select_first();
                     // Auto-fetch items for first stream
                     if let Some(stream) = self.streams.first() {
-                        let _ = self.cmd_tx.send(Command::FetchItems(stream.id.as_str().to_string()));
+                        let _ = self
+                            .cmd_tx
+                            .send(DaemonCommand::FetchItems(stream.id.as_str().to_string()));
                     }
                 }
                 self.status_message = format!("Loaded {} streams", count);
@@ -192,6 +204,8 @@ impl App {
                 self.item_state = ListState::new(count);
                 if count > 0 {
                     self.item_state.select_first();
+                    // Auto-mark first item as read when items are loaded
+                    self.auto_mark_selected_as_read();
                 }
                 self.status_message = format!("Loaded {} items", count);
             }
@@ -203,9 +217,29 @@ impl App {
                 self.status_message = "Disconnected from daemon".to_string();
                 self.daemon_connected = false;
             }
+            Message::CollectionsLoaded(collections) => {
+                let count = collections.len();
+                self.collections = collections;
+                self.collection_state = ListState::new(count);
+                if count > 0 {
+                    self.collection_state.select_first();
+                }
+                self.status_message = format!("Loaded {} collections", count);
+            }
+            Message::CollectionCreated(collection) => {
+                self.status_message = format!("Created collection: {}", collection.name);
+                // Refresh collections list
+                let _ = self.cmd_tx.send(DaemonCommand::FetchCollections);
+            }
+            Message::ItemAddedToCollection => {
+                self.status_message = "Item added to collection".to_string();
+                self.collection_picker_active = false;
+            }
+            Message::ItemRemovedFromCollection => {
+                self.status_message = "Item removed from collection".to_string();
+            }
         }
     }
-
 
     fn render(&self, frame: &mut ratatui::Frame) {
         let size = frame.area();
@@ -249,6 +283,7 @@ impl App {
         // Render omnibar
         OmnibarWidget::new(&self.omnibar_input, &self.theme)
             .active(self.omnibar_active)
+            .suggestions(&self.omnibar_suggestions)
             .render(frame, main_chunks[1]);
 
         // Render status bar
@@ -270,24 +305,48 @@ impl AppState for App {
                 return false;
             }
             AppEvent::Key(key) => {
+                // Handle collection picker when active
+                if self.collection_picker_active {
+                    match key.code {
+                        KeyCode::Esc => {
+                            self.collection_picker_active = false;
+                        }
+                        KeyCode::Char('j') | KeyCode::Down => {
+                            self.collection_state.select_next();
+                        }
+                        KeyCode::Char('k') | KeyCode::Up => {
+                            self.collection_state.select_prev();
+                        }
+                        KeyCode::Enter => {
+                            self.add_item_to_selected_collection();
+                        }
+                        _ => {}
+                    }
+                    return true;
+                }
+
                 // Handle omnibar input when active
                 if self.omnibar_active {
                     match key.code {
                         KeyCode::Esc => {
                             self.omnibar_active = false;
                             self.omnibar_input.clear();
+                            self.omnibar_suggestions.clear();
                         }
                         KeyCode::Enter => {
-                            // TODO: Execute search/command
-                            self.status_message = format!("Search: {}", self.omnibar_input);
+                            // Execute command or search
+                            self.execute_omnibar_input();
                             self.omnibar_active = false;
                             self.omnibar_input.clear();
+                            self.omnibar_suggestions.clear();
                         }
                         KeyCode::Backspace => {
                             self.omnibar_input.pop();
+                            self.update_command_suggestions();
                         }
                         KeyCode::Char(c) => {
                             self.omnibar_input.push(c);
+                            self.update_command_suggestions();
                         }
                         _ => {}
                     }
@@ -328,8 +387,25 @@ impl AppState for App {
                         // TODO: Open selected item
                         self.status_message = "Open item (not implemented)".to_string();
                     }
+                    KeyCode::Char('s') => {
+                        self.toggle_save_item();
+                    }
+                    KeyCode::Char('r') => {
+                        self.toggle_read_status();
+                    }
+                    KeyCode::Char('e') => {
+                        self.archive_selected_item();
+                    }
+                    KeyCode::Char('a') => {
+                        self.show_collection_picker();
+                    }
+                    KeyCode::Char('d') => {
+                        self.remove_item_from_current_collection();
+                    }
                     KeyCode::Char('?') => {
-                        self.status_message = "h/l:panes j/k:nav /:search q:quit".to_string();
+                        self.status_message =
+                            "h/l:panes j/k:nav /:search r:read/unread e:archive s:save a:add-to-collection d:remove-from-collection q:quit"
+                                .to_string();
                     }
                     _ => {}
                 }
@@ -360,7 +436,10 @@ impl App {
                     self.fetch_items_for_selected_stream();
                 }
             }
-            FocusedPane::ItemList => self.item_state.select_next(),
+            FocusedPane::ItemList => {
+                self.item_state.select_next();
+                self.auto_mark_selected_as_read();
+            }
             _ => {}
         }
     }
@@ -375,7 +454,10 @@ impl App {
                     self.fetch_items_for_selected_stream();
                 }
             }
-            FocusedPane::ItemList => self.item_state.select_prev(),
+            FocusedPane::ItemList => {
+                self.item_state.select_prev();
+                self.auto_mark_selected_as_read();
+            }
             _ => {}
         }
     }
@@ -389,7 +471,10 @@ impl App {
                     self.fetch_items_for_selected_stream();
                 }
             }
-            FocusedPane::ItemList => self.item_state.select_first(),
+            FocusedPane::ItemList => {
+                self.item_state.select_first();
+                self.auto_mark_selected_as_read();
+            }
             _ => {}
         }
     }
@@ -403,7 +488,10 @@ impl App {
                     self.fetch_items_for_selected_stream();
                 }
             }
-            FocusedPane::ItemList => self.item_state.select_last(),
+            FocusedPane::ItemList => {
+                self.item_state.select_last();
+                self.auto_mark_selected_as_read();
+            }
             _ => {}
         }
     }
@@ -411,9 +499,217 @@ impl App {
     fn fetch_items_for_selected_stream(&mut self) {
         if let Some(idx) = self.stream_state.selected {
             if let Some(stream) = self.streams.get(idx) {
-                let _ = self.cmd_tx.send(Command::FetchItems(stream.id.as_str().to_string()));
+                let _ = self
+                    .cmd_tx
+                    .send(DaemonCommand::FetchItems(stream.id.as_str().to_string()));
                 self.status_message = format!("Loading items for {}...", stream.name);
             }
+        }
+    }
+
+    fn toggle_save_item(&mut self) {
+        // Only toggle if we're focused on item list and have a selected item
+        if self.focused != FocusedPane::ItemList {
+            self.status_message = "Focus on item list to save/unsave".to_string();
+            return;
+        }
+
+        if let Some(idx) = self.item_state.selected {
+            if let Some(item) = self.items.get_mut(idx) {
+                let item_id = item.id.as_str().to_string();
+                let is_saved = item.is_saved;
+
+                // Toggle saved state locally
+                item.is_saved = !is_saved;
+
+                // Send command to daemon
+                if is_saved {
+                    let _ = self.cmd_tx.send(DaemonCommand::UnsaveItem(item_id));
+                    self.status_message = "Item unsaved".to_string();
+                } else {
+                    let _ = self.cmd_tx.send(DaemonCommand::SaveItem(item_id));
+                    self.status_message = "Item saved".to_string();
+                }
+            }
+        }
+    }
+
+    fn toggle_read_status(&mut self) {
+        if self.focused != FocusedPane::ItemList {
+            self.status_message = "Focus on item list to mark read/unread".to_string();
+            return;
+        }
+
+        if let Some(idx) = self.item_state.selected {
+            if let Some(item) = self.items.get_mut(idx) {
+                let new_read_status = !item.is_read;
+                let item_id = item.id.as_str().to_string();
+
+                // Update local state immediately for responsive UI
+                item.is_read = new_read_status;
+
+                // Send command to daemon
+                let cmd = if new_read_status {
+                    DaemonCommand::MarkItemRead(item_id)
+                } else {
+                    DaemonCommand::MarkItemUnread(item_id)
+                };
+                let _ = self.cmd_tx.send(cmd);
+
+                self.status_message = format!(
+                    "Marked as {}",
+                    if new_read_status { "read" } else { "unread" }
+                );
+            }
+        }
+    }
+
+    fn archive_selected_item(&mut self) {
+        if self.focused != FocusedPane::ItemList {
+            self.status_message = "Focus on item list to archive".to_string();
+            return;
+        }
+
+        if let Some(idx) = self.item_state.selected {
+            if let Some(item) = self.items.get(idx) {
+                let item_id = item.id.as_str().to_string();
+                let _ = self.cmd_tx.send(DaemonCommand::ArchiveItem(item_id));
+                self.status_message = "Item archived".to_string();
+
+                // Remove from current view
+                self.items.remove(idx);
+                self.item_state.update_len(self.items.len());
+                // update_len will handle fixing the selection if idx is out of bounds
+            }
+        }
+    }
+
+    fn auto_mark_selected_as_read(&mut self) {
+        if let Some(idx) = self.item_state.selected {
+            if let Some(item) = self.items.get_mut(idx) {
+                // Only mark as read if currently unread
+                if !item.is_read {
+                    let item_id = item.id.as_str().to_string();
+                    item.is_read = true;
+                    let _ = self.cmd_tx.send(DaemonCommand::MarkItemRead(item_id));
+                }
+            }
+        }
+    }
+
+    fn show_collection_picker(&mut self) {
+        if self.focused != FocusedPane::ItemList {
+            self.status_message = "Focus on item list to add to collection".to_string();
+            return;
+        }
+
+        if self.item_state.selected.is_none() {
+            self.status_message = "No item selected".to_string();
+            return;
+        }
+
+        // Fetch collections if not already loaded
+        if self.collections.is_empty() {
+            let _ = self.cmd_tx.send(DaemonCommand::FetchCollections);
+            self.status_message = "Loading collections...".to_string();
+        } else {
+            self.collection_picker_active = true;
+            self.status_message = "Select collection (j/k to navigate, Enter to add, Esc to cancel)".to_string();
+        }
+    }
+
+    fn add_item_to_selected_collection(&mut self) {
+        if let Some(item_idx) = self.item_state.selected {
+            if let Some(collection_idx) = self.collection_state.selected {
+                if let Some(item) = self.items.get(item_idx) {
+                    if let Some(collection) = self.collections.get(collection_idx) {
+                        let item_id = item.id.as_str().to_string();
+                        let collection_id = collection.id.0.clone();
+                        let _ = self.cmd_tx.send(DaemonCommand::AddToCollection {
+                            collection_id,
+                            item_id,
+                        });
+                        self.status_message = format!("Adding to collection: {}", collection.name);
+                    }
+                }
+            }
+        }
+    }
+
+    fn remove_item_from_current_collection(&mut self) {
+        // This only works if we're viewing a collection stream
+        // For now, show a message
+        self.status_message = "Remove from collection not yet fully implemented".to_string();
+
+        // TODO: Implement logic to detect if current stream is a collection
+        // and remove the current item from it
+    }
+
+    /// Execute the current omnibar input as a command or search.
+    fn execute_omnibar_input(&mut self) {
+        use command::{parse_command, Command};
+
+        let input = self.omnibar_input.trim();
+        if input.is_empty() {
+            return;
+        }
+
+        match parse_command(input) {
+            Some(Command::Quit) => {
+                self.quit = true;
+            }
+            Some(Command::Sync(provider)) => {
+                match provider {
+                    Some(ref p) => {
+                        self.status_message = format!("Syncing provider: {}", p);
+                        // TODO: Send sync command to daemon when implemented
+                    }
+                    None => {
+                        self.status_message = "Syncing all providers...".to_string();
+                        // TODO: Send sync command to daemon when implemented
+                    }
+                }
+            }
+            Some(Command::Refresh) => {
+                self.status_message = "Refreshing...".to_string();
+                let _ = self.cmd_tx.send(DaemonCommand::FetchStreams);
+            }
+            Some(Command::Help) => {
+                self.status_message = "Help: Type :h for commands, / for search".to_string();
+                // TODO: Show help in a modal/preview pane
+                // For now, just update status message with abbreviated help
+            }
+            Some(Command::Search(query)) => {
+                self.execute_search(query);
+            }
+            None => {
+                self.status_message = format!("Unknown command: {}", input);
+            }
+        }
+    }
+
+    /// Execute a search query.
+    fn execute_search(&mut self, query: search::SearchQuery) {
+        if query.has_advanced_syntax {
+            self.status_message = format!("Searching with filters: {}", query.text);
+            // TODO: Send search RPC to daemon
+            // For now, just show the query in status
+        } else {
+            // Simple search: filter items locally
+            self.status_message = format!("Search: {}", query.text);
+            // TODO: Filter self.items based on query.text
+            // For now, just show the search in status
+        }
+    }
+
+    /// Update command suggestions based on current omnibar input.
+    fn update_command_suggestions(&mut self) {
+        use command::get_command_suggestions;
+
+        if self.omnibar_input.starts_with(':') {
+            self.omnibar_suggestions = get_command_suggestions(&self.omnibar_input);
+        } else {
+            self.omnibar_suggestions.clear();
         }
     }
 }
