@@ -1,6 +1,6 @@
-use scryforge_provider_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
 use fusabi_tui_widgets::prelude::*;
 use ratatui::{backend::TestBackend, layout::Rect, Terminal};
+use scryforge_provider_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
 use std::collections::HashMap;
 
 /// Helper to create a test terminal with a specific size

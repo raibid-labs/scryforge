@@ -32,7 +32,8 @@ pub async fn start_server() -> Result<(ServerHandle, std::net::SocketAddr)> {
         .context("Failed to build JSON-RPC server")?;
 
     // Get the address
-    let addr = server.local_addr()
+    let addr = server
+        .local_addr()
         .context("Failed to get server address")?;
     info!("JSON-RPC server listening on {}", addr);
 

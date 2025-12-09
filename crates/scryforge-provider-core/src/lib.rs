@@ -23,6 +23,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Serialize};
+use std::any::Any;
 use std::collections::HashMap;
 use thiserror::Error;
 
@@ -337,6 +338,9 @@ pub trait Provider: Send + Sync {
 
     /// Execute an action on an item
     async fn execute_action(&self, item: &Item, action: &Action) -> Result<ActionResult>;
+
+    /// Support for downcasting to concrete types
+    fn as_any(&self) -> &dyn Any;
 }
 
 // ============================================================================
@@ -398,10 +402,19 @@ pub trait HasCollections: Provider {
     /// Get items in a collection (ordered)
     async fn get_collection_items(&self, collection_id: &CollectionId) -> Result<Vec<Item>>;
 
-    // TODO: Phase 4 - write operations
-    // async fn add_to_collection(&self, collection_id: &CollectionId, item_id: &ItemId) -> Result<()>;
-    // async fn remove_from_collection(&self, collection_id: &CollectionId, item_id: &ItemId) -> Result<()>;
-    // async fn reorder_collection(&self, collection_id: &CollectionId, item_ids: &[ItemId]) -> Result<()>;
+    /// Add an item to a collection
+    async fn add_to_collection(&self, collection_id: &CollectionId, item_id: &ItemId)
+        -> Result<()>;
+
+    /// Remove an item from a collection
+    async fn remove_from_collection(
+        &self,
+        collection_id: &CollectionId,
+        item_id: &ItemId,
+    ) -> Result<()>;
+
+    /// Create a new collection with the given name
+    async fn create_collection(&self, name: &str) -> Result<Collection>;
 }
 
 /// Options for fetching saved items.
@@ -423,9 +436,11 @@ pub trait HasSavedItems: Provider {
     /// Check if a specific item is saved
     async fn is_saved(&self, item_id: &ItemId) -> Result<bool>;
 
-    // TODO: Phase 4 - write operations
-    // async fn save_item(&self, item_id: &ItemId) -> Result<()>;
-    // async fn unsave_item(&self, item_id: &ItemId) -> Result<()>;
+    /// Save/bookmark an item
+    async fn save_item(&self, item_id: &ItemId) -> Result<()>;
+
+    /// Unsave/remove bookmark from an item
+    async fn unsave_item(&self, item_id: &ItemId) -> Result<()>;
 }
 
 /// A community or subscription (subreddit, channel, publication).
@@ -509,9 +524,9 @@ pub mod auth {
 pub mod prelude {
     pub use crate::{
         Action, ActionKind, ActionResult, Author, Collection, CollectionId, Community, CommunityId,
-        Feed, FeedId, FeedOptions, HasCollections, HasCommunities, HasFeeds, HasSavedItems, HasTasks,
-        Item, ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth, Result,
-        SavedItemsOptions, Stream, StreamError, StreamId, StreamType, SyncResult,
+        Feed, FeedId, FeedOptions, HasCollections, HasCommunities, HasFeeds, HasSavedItems,
+        HasTasks, Item, ItemContent, ItemId, Provider, ProviderCapabilities, ProviderHealth,
+        Result, SavedItemsOptions, Stream, StreamError, StreamId, StreamType, SyncResult,
     };
 
     #[cfg(feature = "sigilforge")]

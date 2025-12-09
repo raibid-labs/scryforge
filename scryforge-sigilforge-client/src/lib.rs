@@ -207,14 +207,12 @@ impl SigilforgeClient {
         T: for<'de> Deserialize<'de>,
     {
         // Connect to the daemon
-        let mut stream = UnixStream::connect(&self.socket_path)
-            .await
-            .map_err(|e| {
-                SigilforgeError::Connection(format!(
-                    "Failed to connect to {:?}: {}",
-                    self.socket_path, e
-                ))
-            })?;
+        let mut stream = UnixStream::connect(&self.socket_path).await.map_err(|e| {
+            SigilforgeError::Connection(format!(
+                "Failed to connect to {:?}: {}",
+                self.socket_path, e
+            ))
+        })?;
 
         debug!("Connected to Sigilforge daemon at {:?}", self.socket_path);
 

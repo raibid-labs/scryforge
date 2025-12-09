@@ -3,7 +3,9 @@
 //! These tests verify the client's behavior with both real and mocked
 //! Sigilforge daemon responses.
 
-use scryforge_sigilforge_client::{MockTokenFetcher, SigilforgeClient, SigilforgeError, TokenFetcher};
+use scryforge_sigilforge_client::{
+    MockTokenFetcher, SigilforgeClient, SigilforgeError, TokenFetcher,
+};
 use serde_json::json;
 use std::collections::HashMap;
 use std::path::PathBuf;

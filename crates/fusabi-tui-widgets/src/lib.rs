@@ -19,7 +19,6 @@
 //! - Accessible: Keyboard-first navigation
 //! - Responsive: Adapt to terminal size
 
-use scryforge_provider_core::{Item, Stream};
 use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
@@ -27,6 +26,7 @@ use ratatui::{
     widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
     Frame,
 };
+use scryforge_provider_core::{Item, Stream};
 
 // ============================================================================
 // Theme / Styling
@@ -189,8 +189,18 @@ impl<'a> ItemListWidget<'a> {
                     spans.push(Span::styled("● ", Style::default().fg(self.theme.unread)));
                 }
 
-                // Title
-                spans.push(Span::raw(&item.title));
+                // Saved/starred indicator
+                if item.is_saved {
+                    spans.push(Span::styled("★ ", Style::default().fg(self.theme.accent)));
+                }
+
+                // Title - bold if unread
+                let title_style = if !item.is_read {
+                    Style::default().add_modifier(Modifier::BOLD)
+                } else {
+                    Style::default()
+                };
+                spans.push(Span::styled(&item.title, title_style));
 
                 // Author if present
                 if let Some(ref author) = item.author {
@@ -384,15 +394,15 @@ impl<'a> StatusBarWidget<'a> {
 
 /// Widget for command palette / quick search.
 ///
-/// TODO: Implement full omnibar functionality:
+/// Supports:
 /// - Text input for search/commands
 /// - Autocomplete suggestions
-/// - Command history
-/// - Fuzzy matching
+/// - Command hints
 pub struct OmnibarWidget<'a> {
     input: &'a str,
     placeholder: &'a str,
     active: bool,
+    suggestions: &'a [String],
     theme: &'a Theme,
 }
 
@@ -402,6 +412,7 @@ impl<'a> OmnibarWidget<'a> {
             input,
             placeholder: "Type to search or press : for commands...",
             active: false,
+            suggestions: &[],
             theme,
         }
     }
@@ -416,6 +427,11 @@ impl<'a> OmnibarWidget<'a> {
         self
     }
 
+    pub fn suggestions(mut self, suggestions: &'a [String]) -> Self {
+        self.suggestions = suggestions;
+        self
+    }
+
     pub fn render(self, frame: &mut Frame, area: Rect) {
         let border_color = if self.active {
             self.theme.border_focused
@@ -427,13 +443,29 @@ impl<'a> OmnibarWidget<'a> {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(border_color));
 
+        // Build content lines
+        let mut lines = Vec::new();
+
+        // Input line
         let display_text = if self.input.is_empty() {
             Span::styled(self.placeholder, Style::default().fg(self.theme.muted))
         } else {
             Span::raw(self.input)
         };
+        lines.push(Line::from(display_text));
 
-        let paragraph = Paragraph::new(Line::from(display_text)).block(block);
+        // Show suggestions if available and omnibar is active
+        if self.active && !self.suggestions.is_empty() {
+            // Take first 3 suggestions to fit in the space
+            for suggestion in self.suggestions.iter().take(3) {
+                lines.push(Line::from(Span::styled(
+                    format!("  {}", suggestion),
+                    Style::default().fg(self.theme.muted),
+                )));
+            }
+        }
+
+        let paragraph = Paragraph::new(lines).block(block);
         frame.render_widget(paragraph, area);
     }
 }

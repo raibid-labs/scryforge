@@ -4,17 +4,18 @@
 //! that return dummy data for now (Phase 2 will wire up actual providers).
 
 use chrono::Utc;
-use scryforge_provider_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
+use scryforge_provider_core::{
+    Collection, CollectionId, Item, ItemContent, ItemId, Stream, StreamId, StreamType,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
-use crate::sync::{ProviderSyncState, SyncManager};
 use crate::cache::Cache;
-
+use crate::sync::{ProviderSyncState, SyncManager};
 
 // Re-export search types for use in TUI
 pub use serde_json::Value as JsonValue;
@@ -62,7 +63,49 @@ pub trait ScryforgeApi {
     ///   - `is_read`: Filter by read status (boolean)
     ///   - `is_saved`: Filter by saved status (boolean)
     #[method(name = "search.query")]
-    async fn search_query(&self, query: String, filters: Option<JsonValue>) -> RpcResult<Vec<Item>>;
+    async fn search_query(&self, query: String, filters: Option<JsonValue>)
+        -> RpcResult<Vec<Item>>;
+
+    /// Mark an item as read.
+    #[method(name = "items.mark_read")]
+    async fn mark_item_read(&self, item_id: String) -> RpcResult<()>;
+
+    /// Mark an item as unread.
+    #[method(name = "items.mark_unread")]
+    async fn mark_item_unread(&self, item_id: String) -> RpcResult<()>;
+
+    /// Archive an item.
+    #[method(name = "items.archive")]
+    async fn archive_item(&self, item_id: String) -> RpcResult<()>;
+
+    /// Save an item (bookmark/star).
+    #[method(name = "items.save")]
+    async fn save_item(&self, item_id: String) -> RpcResult<()>;
+
+    /// Unsave an item (remove bookmark/star).
+    #[method(name = "items.unsave")]
+    async fn unsave_item(&self, item_id: String) -> RpcResult<()>;
+
+    /// List all collections across all providers.
+    #[method(name = "collections.list")]
+    async fn list_collections(&self) -> RpcResult<Vec<Collection>>;
+
+    /// Get items in a specific collection.
+    #[method(name = "collections.items")]
+    async fn get_collection_items(&self, collection_id: String) -> RpcResult<Vec<Item>>;
+
+    /// Add an item to a collection.
+    #[method(name = "collections.add_item")]
+    async fn add_to_collection(&self, collection_id: String, item_id: String) -> RpcResult<()>;
+
+    /// Remove an item from a collection.
+    #[method(name = "collections.remove_item")]
+    async fn remove_from_collection(&self, collection_id: String, item_id: String)
+        -> RpcResult<()>;
+
+    /// Create a new collection.
+    #[method(name = "collections.create")]
+    async fn create_collection(&self, name: String) -> RpcResult<Collection>;
 }
 
 /// Implementation of the Scryforge API.
@@ -96,11 +139,20 @@ impl<C: Cache + 'static> ApiImpl<C> {
         }
     }
 
-    pub fn with_sync_manager_and_cache(sync_manager: Arc<RwLock<SyncManager<C>>>, cache: Arc<C>) -> Self {
+    pub fn with_sync_manager_and_cache(
+        sync_manager: Arc<RwLock<SyncManager<C>>>,
+        cache: Arc<C>,
+    ) -> Self {
         Self {
             sync_manager: Some(sync_manager),
             cache: Some(cache),
         }
+    }
+
+    /// Extract provider ID from a collection ID string.
+    /// Format expected: "provider:collection-id"
+    fn extract_provider_id(id: &str) -> Option<&str> {
+        id.split(':').next()
     }
 
     /// Generate dummy streams for testing.
@@ -246,7 +298,10 @@ impl<C: Cache + 'static> ApiImpl<C> {
                     stream_id: StreamId(stream_id.to_string()),
                     title: "Rust 1.75 Released".to_string(),
                     content: ItemContent::Article {
-                        summary: Some("The Rust team is happy to announce a new version of Rust...".to_string()),
+                        summary: Some(
+                            "The Rust team is happy to announce a new version of Rust..."
+                                .to_string(),
+                        ),
                         full_content: None,
                     },
                     author: Some(scryforge_provider_core::Author {
@@ -266,53 +321,49 @@ impl<C: Cache + 'static> ApiImpl<C> {
                 },
             ]
         } else if stream_id.starts_with("spotify:") {
-            vec![
-                Item {
-                    id: ItemId::new("spotify", "track-001"),
-                    stream_id: StreamId(stream_id.to_string()),
-                    title: "Example Song".to_string(),
-                    content: ItemContent::Track {
-                        album: Some("Example Album".to_string()),
-                        duration_ms: Some(210000),
-                        artists: vec!["Example Artist".to_string()],
-                    },
-                    author: Some(scryforge_provider_core::Author {
-                        name: "Example Artist".to_string(),
-                        email: None,
-                        url: None,
-                        avatar_url: None,
-                    }),
-                    published: None,
-                    updated: None,
-                    url: Some("https://open.spotify.com/track/example".to_string()),
-                    thumbnail_url: None,
-                    is_read: false,
-                    is_saved: true,
-                    tags: vec![],
-                    metadata: HashMap::new(),
+            vec![Item {
+                id: ItemId::new("spotify", "track-001"),
+                stream_id: StreamId(stream_id.to_string()),
+                title: "Example Song".to_string(),
+                content: ItemContent::Track {
+                    album: Some("Example Album".to_string()),
+                    duration_ms: Some(210000),
+                    artists: vec!["Example Artist".to_string()],
                 },
-            ]
+                author: Some(scryforge_provider_core::Author {
+                    name: "Example Artist".to_string(),
+                    email: None,
+                    url: None,
+                    avatar_url: None,
+                }),
+                published: None,
+                updated: None,
+                url: Some("https://open.spotify.com/track/example".to_string()),
+                thumbnail_url: None,
+                is_read: false,
+                is_saved: true,
+                tags: vec![],
+                metadata: HashMap::new(),
+            }]
         } else {
             // Generic items for other streams
-            vec![
-                Item {
-                    id: ItemId::new("generic", "item-001"),
-                    stream_id: StreamId(stream_id.to_string()),
-                    title: "Example Item".to_string(),
-                    content: ItemContent::Generic {
-                        body: Some("This is a generic item from the daemon API.".to_string()),
-                    },
-                    author: None,
-                    published: Some(Utc::now()),
-                    updated: None,
-                    url: None,
-                    thumbnail_url: None,
-                    is_read: false,
-                    is_saved: false,
-                    tags: vec![],
-                    metadata: HashMap::new(),
+            vec![Item {
+                id: ItemId::new("generic", "item-001"),
+                stream_id: StreamId(stream_id.to_string()),
+                title: "Example Item".to_string(),
+                content: ItemContent::Generic {
+                    body: Some("This is a generic item from the daemon API.".to_string()),
                 },
-            ]
+                author: None,
+                published: Some(Utc::now()),
+                updated: None,
+                url: None,
+                thumbnail_url: None,
+                is_read: false,
+                is_saved: false,
+                tags: vec![],
+                metadata: HashMap::new(),
+            }]
         }
     }
 }
@@ -341,14 +392,13 @@ impl<C: Cache + 'static> ScryforgeApiServer for ApiImpl<C> {
     async fn sync_trigger(&self, provider_id: String) -> RpcResult<()> {
         if let Some(ref sync_manager) = self.sync_manager {
             let manager = sync_manager.read().await;
-            manager
-                .trigger_sync(&provider_id)
-                .await
-                .map_err(|e| jsonrpsee::types::ErrorObjectOwned::owned(
+            manager.trigger_sync(&provider_id).await.map_err(|e| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
                     -32000,
                     format!("Failed to trigger sync: {}", e),
                     None::<()>,
-                ))
+                )
+            })
         } else {
             Err(jsonrpsee::types::ErrorObjectOwned::owned(
                 -32001,
@@ -358,7 +408,11 @@ impl<C: Cache + 'static> ScryforgeApiServer for ApiImpl<C> {
         }
     }
 
-    async fn search_query(&self, query: String, filters: Option<JsonValue>) -> RpcResult<Vec<Item>> {
+    async fn search_query(
+        &self,
+        query: String,
+        filters: Option<JsonValue>,
+    ) -> RpcResult<Vec<Item>> {
         // If cache is available, use it for search
         if let Some(ref cache) = self.cache {
             // Parse filters from JSON
@@ -390,14 +444,600 @@ impl<C: Cache + 'static> ScryforgeApiServer for ApiImpl<C> {
                     is_read,
                     is_saved,
                 )
-                .map_err(|e| jsonrpsee::types::ErrorObjectOwned::owned(
-                    -32000,
-                    format!("Search failed: {}", e),
-                    None::<()>,
-                ))
+                .map_err(|e| {
+                    jsonrpsee::types::ErrorObjectOwned::owned(
+                        -32000,
+                        format!("Search failed: {}", e),
+                        None::<()>,
+                    )
+                })
         } else {
             // If no cache available, return empty results
             Ok(Vec::new())
         }
+    }
+
+    async fn mark_item_read(&self, item_id: String) -> RpcResult<()> {
+        if let Some(ref cache) = self.cache {
+            let id = ItemId(item_id);
+            cache.mark_read(&id, true).map_err(|e| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Failed to mark item as read: {}", e),
+                    None::<()>,
+                )
+            })
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Cache not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn mark_item_unread(&self, item_id: String) -> RpcResult<()> {
+        if let Some(ref cache) = self.cache {
+            let id = ItemId(item_id);
+            cache.mark_read(&id, false).map_err(|e| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Failed to mark item as unread: {}", e),
+                    None::<()>,
+                )
+            })
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Cache not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn archive_item(&self, item_id: String) -> RpcResult<()> {
+        if let Some(ref cache) = self.cache {
+            let id = ItemId(item_id);
+            cache.mark_archived(&id, true).map_err(|e| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Failed to archive item: {}", e),
+                    None::<()>,
+                )
+            })
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Cache not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn save_item(&self, item_id: String) -> RpcResult<()> {
+        if let Some(ref cache) = self.cache {
+            let id = ItemId(item_id);
+            cache.mark_starred(&id, true).map_err(|e| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Failed to save item: {}", e),
+                    None::<()>,
+                )
+            })
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Cache not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn unsave_item(&self, item_id: String) -> RpcResult<()> {
+        if let Some(ref cache) = self.cache {
+            let id = ItemId(item_id);
+            cache.mark_starred(&id, false).map_err(|e| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32000,
+                    format!("Failed to unsave item: {}", e),
+                    None::<()>,
+                )
+            })
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Cache not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn list_collections(&self) -> RpcResult<Vec<Collection>> {
+        use scryforge_provider_core::HasCollections;
+
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            let registry = manager.get_registry();
+
+            let mut all_collections = Vec::new();
+
+            // Iterate through all providers and collect their collections
+            for provider_id in registry.list() {
+                if let Some(provider) = registry.get(provider_id) {
+                    // Check if provider supports collections
+                    if provider.capabilities().has_collections {
+                        // Downcast to HasCollections trait
+                        if let Some(collections_provider) = provider
+                            .as_any()
+                            .downcast_ref::<provider_dummy::DummyProvider>(
+                        ) {
+                            match collections_provider.list_collections().await {
+                                Ok(collections) => all_collections.extend(collections),
+                                Err(e) => {
+                                    tracing::warn!(
+                                        "Failed to list collections from provider {}: {}",
+                                        provider_id,
+                                        e
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Ok(all_collections)
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Sync manager not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn get_collection_items(&self, collection_id: String) -> RpcResult<Vec<Item>> {
+        use scryforge_provider_core::HasCollections;
+
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            let registry = manager.get_registry();
+
+            // Extract provider ID from collection ID
+            let provider_id = Self::extract_provider_id(&collection_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32002,
+                    "Invalid collection ID format".to_string(),
+                    None::<()>,
+                )
+            })?;
+
+            let provider = registry.get(provider_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32003,
+                    format!("Provider '{}' not found", provider_id),
+                    None::<()>,
+                )
+            })?;
+
+            // Check if provider supports collections
+            if !provider.capabilities().has_collections {
+                return Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32004,
+                    format!("Provider '{}' does not support collections", provider_id),
+                    None::<()>,
+                ));
+            }
+
+            // Downcast to HasCollections trait
+            if let Some(collections_provider) = provider
+                .as_any()
+                .downcast_ref::<provider_dummy::DummyProvider>()
+            {
+                collections_provider
+                    .get_collection_items(&CollectionId(collection_id))
+                    .await
+                    .map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32000,
+                            format!("Failed to get collection items: {}", e),
+                            None::<()>,
+                        )
+                    })
+            } else {
+                Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32005,
+                    format!(
+                        "Provider '{}' does not implement HasCollections",
+                        provider_id
+                    ),
+                    None::<()>,
+                ))
+            }
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Sync manager not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn add_to_collection(&self, collection_id: String, item_id: String) -> RpcResult<()> {
+        use scryforge_provider_core::HasCollections;
+
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            let registry = manager.get_registry();
+
+            // Extract provider ID from collection ID
+            let provider_id = Self::extract_provider_id(&collection_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32002,
+                    "Invalid collection ID format".to_string(),
+                    None::<()>,
+                )
+            })?;
+
+            let provider = registry.get(provider_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32003,
+                    format!("Provider '{}' not found", provider_id),
+                    None::<()>,
+                )
+            })?;
+
+            // Check if provider supports collections
+            if !provider.capabilities().has_collections {
+                return Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32004,
+                    format!("Provider '{}' does not support collections", provider_id),
+                    None::<()>,
+                ));
+            }
+
+            // Downcast to HasCollections trait
+            if let Some(collections_provider) = provider
+                .as_any()
+                .downcast_ref::<provider_dummy::DummyProvider>()
+            {
+                collections_provider
+                    .add_to_collection(&CollectionId(collection_id), &ItemId(item_id))
+                    .await
+                    .map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32000,
+                            format!("Failed to add item to collection: {}", e),
+                            None::<()>,
+                        )
+                    })
+            } else {
+                Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32005,
+                    format!(
+                        "Provider '{}' does not implement HasCollections",
+                        provider_id
+                    ),
+                    None::<()>,
+                ))
+            }
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Sync manager not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn remove_from_collection(
+        &self,
+        collection_id: String,
+        item_id: String,
+    ) -> RpcResult<()> {
+        use scryforge_provider_core::HasCollections;
+
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            let registry = manager.get_registry();
+
+            // Extract provider ID from collection ID
+            let provider_id = Self::extract_provider_id(&collection_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32002,
+                    "Invalid collection ID format".to_string(),
+                    None::<()>,
+                )
+            })?;
+
+            let provider = registry.get(provider_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32003,
+                    format!("Provider '{}' not found", provider_id),
+                    None::<()>,
+                )
+            })?;
+
+            // Check if provider supports collections
+            if !provider.capabilities().has_collections {
+                return Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32004,
+                    format!("Provider '{}' does not support collections", provider_id),
+                    None::<()>,
+                ));
+            }
+
+            // Downcast to HasCollections trait
+            if let Some(collections_provider) = provider
+                .as_any()
+                .downcast_ref::<provider_dummy::DummyProvider>()
+            {
+                collections_provider
+                    .remove_from_collection(&CollectionId(collection_id), &ItemId(item_id))
+                    .await
+                    .map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32000,
+                            format!("Failed to remove item from collection: {}", e),
+                            None::<()>,
+                        )
+                    })
+            } else {
+                Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32005,
+                    format!(
+                        "Provider '{}' does not implement HasCollections",
+                        provider_id
+                    ),
+                    None::<()>,
+                ))
+            }
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Sync manager not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+
+    async fn create_collection(&self, name: String) -> RpcResult<Collection> {
+        use scryforge_provider_core::HasCollections;
+
+        if let Some(ref sync_manager) = self.sync_manager {
+            let manager = sync_manager.read().await;
+            let registry = manager.get_registry();
+
+            // For now, create collection in the dummy provider
+            // In the future, this should accept a provider_id parameter
+            let provider_id = "dummy";
+
+            let provider = registry.get(provider_id).ok_or_else(|| {
+                jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32003,
+                    format!("Provider '{}' not found", provider_id),
+                    None::<()>,
+                )
+            })?;
+
+            // Check if provider supports collections
+            if !provider.capabilities().has_collections {
+                return Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32004,
+                    format!("Provider '{}' does not support collections", provider_id),
+                    None::<()>,
+                ));
+            }
+
+            // Downcast to HasCollections trait
+            if let Some(collections_provider) = provider
+                .as_any()
+                .downcast_ref::<provider_dummy::DummyProvider>()
+            {
+                collections_provider
+                    .create_collection(&name)
+                    .await
+                    .map_err(|e| {
+                        jsonrpsee::types::ErrorObjectOwned::owned(
+                            -32000,
+                            format!("Failed to create collection: {}", e),
+                            None::<()>,
+                        )
+                    })
+            } else {
+                Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                    -32005,
+                    format!(
+                        "Provider '{}' does not implement HasCollections",
+                        provider_id
+                    ),
+                    None::<()>,
+                ))
+            }
+        } else {
+            Err(jsonrpsee::types::ErrorObjectOwned::owned(
+                -32001,
+                "Sync manager not available".to_string(),
+                None::<()>,
+            ))
+        }
+    }
+}
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cache::SqliteCache;
+    use std::collections::HashMap;
+    use tempfile::TempDir;
+
+    fn create_test_cache() -> anyhow::Result<SqliteCache> {
+        let temp_dir = TempDir::new()?;
+        let path = temp_dir.path().join("test.db");
+        let cache = SqliteCache::open_at(&path)?;
+        std::mem::forget(temp_dir);
+        Ok(cache)
+    }
+
+    fn create_test_item(id: &str) -> Item {
+        Item {
+            id: ItemId(id.to_string()),
+            stream_id: StreamId("test:stream:1".to_string()),
+            title: "Test Item".to_string(),
+            content: ItemContent::Text("Test content".to_string()),
+            author: None,
+            published: None,
+            updated: None,
+            url: None,
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_save_item() -> anyhow::Result<()> {
+        let cache = Arc::new(create_test_cache()?);
+        let api = ApiImpl::with_cache(cache.clone());
+
+        // Create stream first (required for foreign key constraint)
+        let stream = scryforge_provider_core::Stream {
+            id: StreamId("test:stream:1".to_string()),
+            name: "Test Stream".to_string(),
+            provider_id: "test".to_string(),
+            stream_type: scryforge_provider_core::StreamType::Feed,
+            icon: None,
+            unread_count: None,
+            total_count: None,
+            last_updated: None,
+            metadata: HashMap::new(),
+        };
+        cache.upsert_streams(&[stream])?;
+
+        // Create and insert a test item
+        let item = create_test_item("test:item:1");
+        cache.upsert_items(&[item.clone()])?;
+
+        // Verify item is not saved initially
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert_eq!(items.len(), 1);
+        assert!(!items[0].is_saved);
+
+        // Save the item via RPC
+        let result = ScryforgeApiServer::save_item(&api, "test:item:1".to_string()).await;
+        assert!(result.is_ok());
+
+        // Verify item is now saved
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert_eq!(items.len(), 1);
+        assert!(items[0].is_saved);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_unsave_item() -> anyhow::Result<()> {
+        let cache = Arc::new(create_test_cache()?);
+        let api = ApiImpl::with_cache(cache.clone());
+
+        // Create stream first (required for foreign key constraint)
+        let stream = scryforge_provider_core::Stream {
+            id: StreamId("test:stream:1".to_string()),
+            name: "Test Stream".to_string(),
+            provider_id: "test".to_string(),
+            stream_type: scryforge_provider_core::StreamType::Feed,
+            icon: None,
+            unread_count: None,
+            total_count: None,
+            last_updated: None,
+            metadata: HashMap::new(),
+        };
+        cache.upsert_streams(&[stream])?;
+
+        // Create and insert a test item that's already saved
+        let mut item = create_test_item("test:item:1");
+        item.is_saved = true;
+        cache.upsert_items(&[item.clone()])?;
+
+        // Verify item is saved initially
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert_eq!(items.len(), 1);
+        assert!(items[0].is_saved);
+
+        // Unsave the item via RPC
+        let result = ScryforgeApiServer::unsave_item(&api, "test:item:1".to_string()).await;
+        assert!(result.is_ok());
+
+        // Verify item is now unsaved
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert_eq!(items.len(), 1);
+        assert!(!items[0].is_saved);
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_save_item_without_cache() {
+        let api = ApiImpl::<SqliteCache>::new();
+
+        // Try to save without cache configured
+        let result = ScryforgeApiServer::save_item(&api, "test:item:1".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_unsave_item_without_cache() {
+        let api = ApiImpl::<SqliteCache>::new();
+
+        // Try to unsave without cache configured
+        let result = ScryforgeApiServer::unsave_item(&api, "test:item:1".to_string()).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_toggle_save_multiple_times() -> anyhow::Result<()> {
+        let cache = Arc::new(create_test_cache()?);
+        let api = ApiImpl::with_cache(cache.clone());
+
+        // Create stream first (required for foreign key constraint)
+        let stream = scryforge_provider_core::Stream {
+            id: StreamId("test:stream:1".to_string()),
+            name: "Test Stream".to_string(),
+            provider_id: "test".to_string(),
+            stream_type: scryforge_provider_core::StreamType::Feed,
+            icon: None,
+            unread_count: None,
+            total_count: None,
+            last_updated: None,
+            metadata: HashMap::new(),
+        };
+        cache.upsert_streams(&[stream])?;
+
+        // Create and insert a test item
+        let item = create_test_item("test:item:1");
+        cache.upsert_items(&[item.clone()])?;
+
+        // Save
+        ScryforgeApiServer::save_item(&api, "test:item:1".to_string()).await?;
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert!(items[0].is_saved);
+
+        // Unsave
+        ScryforgeApiServer::unsave_item(&api, "test:item:1".to_string()).await?;
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert!(!items[0].is_saved);
+
+        // Save again
+        ScryforgeApiServer::save_item(&api, "test:item:1".to_string()).await?;
+        let items = cache.get_items(&item.stream_id, None)?;
+        assert!(items[0].is_saved);
+
+        Ok(())
     }
 }

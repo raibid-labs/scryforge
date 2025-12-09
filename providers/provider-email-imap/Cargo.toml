@@ -1,0 +1,25 @@
+[package]
+name = "provider-email-imap"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "IMAP email provider for Scryforge"
+
+[dependencies]
+scryforge-provider-core = { workspace = true, features = ["sigilforge"] }
+async-trait.workspace = true
+chrono.workspace = true
+serde = { workspace = true, features = ["derive"] }
+tokio.workspace = true
+
+# IMAP and email parsing (uses async-std runtime)
+async-imap = "0.10"
+async-native-tls = "0.5"
+mailparse = "0.15"
+async-std = "1.13"
+futures = "0.3"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }

@@ -348,14 +348,19 @@ impl<C: Cache> UnifiedFeedsView<C> {
                         item.metadata
                             .insert("stream_name".to_string(), stream.name.clone());
                         if let Some(ref icon) = stream.icon {
-                            item.metadata.insert("provider_icon".to_string(), icon.clone());
+                            item.metadata
+                                .insert("provider_icon".to_string(), icon.clone());
                         }
                     }
                     all_items.extend(items);
                 }
                 Err(e) => {
                     // Log error but continue with other streams
-                    tracing::warn!("Failed to fetch items for stream {}: {}", stream.id.as_str(), e);
+                    tracing::warn!(
+                        "Failed to fetch items for stream {}: {}",
+                        stream.id.as_str(),
+                        e
+                    );
                 }
             }
         }
@@ -661,12 +666,18 @@ impl UnifiedCollectionsView {
 
             // Check if provider supports collections
             if !provider.capabilities().has_collections {
-                debug!("Provider {} does not support collections, skipping", provider_id);
+                debug!(
+                    "Provider {} does not support collections, skipping",
+                    provider_id
+                );
                 continue;
             }
 
             // Fetch collections from this provider
-            match self.fetch_provider_collections(provider_id, &provider).await {
+            match self
+                .fetch_provider_collections(provider_id, &provider)
+                .await
+            {
                 Ok(collections) => {
                     debug!(
                         "Fetched {} collections from provider {}",
@@ -707,7 +718,10 @@ impl UnifiedCollectionsView {
         // TODO: Implement actual provider querying
         // This requires a way to dynamically cast to HasCollections trait
         // For now, return empty list as a placeholder
-        debug!("fetch_provider_collections for {} not yet fully implemented", provider_id);
+        debug!(
+            "fetch_provider_collections for {} not yet fully implemented",
+            provider_id
+        );
         Ok(Vec::new())
     }
 
@@ -882,6 +896,10 @@ mod tests {
                 message: None,
                 data: None,
             })
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
         }
     }
 

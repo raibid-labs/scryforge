@@ -79,7 +79,11 @@ async fn main() -> Result<()> {
 
     // Display registered providers
     let provider_ids = registry.list();
-    info!("Registered {} provider(s): {:?}", provider_ids.len(), provider_ids);
+    info!(
+        "Registered {} provider(s): {:?}",
+        provider_ids.len(),
+        provider_ids
+    );
 
     // Verify dummy provider is accessible
     if let Some(provider) = registry.get("dummy") {
@@ -88,8 +92,10 @@ async fn main() -> Result<()> {
         // Perform health check
         match provider.health_check().await {
             Ok(health) => {
-                info!("Provider health check: healthy={}, message={:?}",
-                      health.is_healthy, health.message);
+                info!(
+                    "Provider health check: healthy={}, message={:?}",
+                    health.is_healthy, health.message
+                );
             }
             Err(e) => {
                 info!("Provider health check failed: {}", e);

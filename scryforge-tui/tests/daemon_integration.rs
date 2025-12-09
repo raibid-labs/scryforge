@@ -3,10 +3,10 @@
 //! These tests verify that the TUI can successfully connect to the daemon
 //! and fetch streams and items via JSON-RPC.
 
-use scryforge_provider_core::{Item, Stream};
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::HttpClientBuilder;
 use jsonrpsee::rpc_params;
+use scryforge_provider_core::{Item, Stream};
 use tokio::time::{sleep, Duration};
 
 /// Test that we can connect to the daemon and fetch streams.
@@ -16,8 +16,7 @@ async fn test_fetch_streams_from_daemon() {
     // In a real CI environment, we would start the daemon programmatically
 
     // Try to connect to daemon
-    let client_result = HttpClientBuilder::default()
-        .build("http://127.0.0.1:3030");
+    let client_result = HttpClientBuilder::default().build("http://127.0.0.1:3030");
 
     // Skip test if daemon is not running (for CI)
     let client = match client_result {
@@ -37,13 +36,19 @@ async fn test_fetch_streams_from_daemon() {
     match result {
         Ok(streams) => {
             // We should get some streams from the dummy data
-            assert!(!streams.is_empty(), "Should have received at least one stream");
+            assert!(
+                !streams.is_empty(),
+                "Should have received at least one stream"
+            );
             println!("Received {} streams", streams.len());
 
             // Verify stream structure
             for stream in &streams {
                 assert!(!stream.name.is_empty(), "Stream should have a name");
-                assert!(!stream.provider_id.is_empty(), "Stream should have a provider ID");
+                assert!(
+                    !stream.provider_id.is_empty(),
+                    "Stream should have a provider ID"
+                );
             }
         }
         Err(e) => {
@@ -58,8 +63,7 @@ async fn test_fetch_streams_from_daemon() {
 #[tokio::test]
 async fn test_fetch_items_from_daemon() {
     // Try to connect to daemon
-    let client_result = HttpClientBuilder::default()
-        .build("http://127.0.0.1:3030");
+    let client_result = HttpClientBuilder::default().build("http://127.0.0.1:3030");
 
     // Skip test if daemon is not running (for CI)
     let client = match client_result {
@@ -74,7 +78,8 @@ async fn test_fetch_items_from_daemon() {
     sleep(Duration::from_millis(100)).await;
 
     // First get streams to know what stream IDs are available
-    let streams_result: Result<Vec<Stream>, _> = client.request("streams.list", rpc_params![]).await;
+    let streams_result: Result<Vec<Stream>, _> =
+        client.request("streams.list", rpc_params![]).await;
 
     match streams_result {
         Ok(streams) => {
@@ -85,9 +90,8 @@ async fn test_fetch_items_from_daemon() {
 
             // Try to fetch items for the first stream
             let stream_id = streams[0].id.as_str();
-            let items_result: Result<Vec<Item>, _> = client
-                .request("items.list", rpc_params![stream_id])
-                .await;
+            let items_result: Result<Vec<Item>, _> =
+                client.request("items.list", rpc_params![stream_id]).await;
 
             match items_result {
                 Ok(items) => {
@@ -117,8 +121,7 @@ async fn test_fetch_items_from_daemon() {
 #[tokio::test]
 async fn test_daemon_data_structure() {
     // Try to connect to daemon
-    let client_result = HttpClientBuilder::default()
-        .build("http://127.0.0.1:3030");
+    let client_result = HttpClientBuilder::default().build("http://127.0.0.1:3030");
 
     // Skip test if daemon is not running
     if client_result.is_err() {
