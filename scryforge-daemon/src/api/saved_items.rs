@@ -21,15 +21,15 @@ pub fn generate_dummy_saved_items(
     // For now, return some dummy saved items
     let mut items = vec![
         SavedItemResponse {
-            item: fusabi_streams_core::Item {
-                id: fusabi_streams_core::ItemId::new("reddit", "saved-001"),
-                stream_id: fusabi_streams_core::StreamId::new("reddit", "saved", "all"),
+            item: scryforge_provider_core::Item {
+                id: scryforge_provider_core::ItemId::new("reddit", "saved-001"),
+                stream_id: scryforge_provider_core::StreamId::new("reddit", "saved", "all"),
                 title: "Interesting Reddit Post".to_string(),
-                content: fusabi_streams_core::ItemContent::Article {
+                content: scryforge_provider_core::ItemContent::Article {
                     summary: Some("This is a saved Reddit post about Rust...".to_string()),
                     full_content: None,
                 },
-                author: Some(fusabi_streams_core::Author {
+                author: Some(scryforge_provider_core::Author {
                     name: "rustacean".to_string(),
                     email: None,
                     url: None,
@@ -48,16 +48,16 @@ pub fn generate_dummy_saved_items(
             saved_at: Utc::now().to_rfc3339(),
         },
         SavedItemResponse {
-            item: fusabi_streams_core::Item {
-                id: fusabi_streams_core::ItemId::new("spotify", "track-saved-001"),
-                stream_id: fusabi_streams_core::StreamId::new("spotify", "saved", "tracks"),
+            item: scryforge_provider_core::Item {
+                id: scryforge_provider_core::ItemId::new("spotify", "track-saved-001"),
+                stream_id: scryforge_provider_core::StreamId::new("spotify", "saved", "tracks"),
                 title: "Favorite Song".to_string(),
-                content: fusabi_streams_core::ItemContent::Track {
+                content: scryforge_provider_core::ItemContent::Track {
                     album: Some("Great Album".to_string()),
                     duration_ms: Some(240000),
                     artists: vec!["Amazing Artist".to_string()],
                 },
-                author: Some(fusabi_streams_core::Author {
+                author: Some(scryforge_provider_core::Author {
                     name: "Amazing Artist".to_string(),
                     email: None,
                     url: None,
@@ -85,9 +85,9 @@ pub fn generate_dummy_saved_items(
         if let Some(content_type) = filter_obj.get("content_type").and_then(|v| v.as_str()) {
             items.retain(|item| {
                 let item_type = match &item.item.content {
-                    fusabi_streams_core::ItemContent::Article { .. } => "article",
-                    fusabi_streams_core::ItemContent::Track { .. } => "track",
-                    fusabi_streams_core::ItemContent::Video { .. } => "video",
+                    scryforge_provider_core::ItemContent::Article { .. } => "article",
+                    scryforge_provider_core::ItemContent::Track { .. } => "track",
+                    scryforge_provider_core::ItemContent::Video { .. } => "video",
                     _ => "other",
                 };
                 item_type.eq_ignore_ascii_case(content_type)

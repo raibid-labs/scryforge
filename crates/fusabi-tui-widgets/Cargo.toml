@@ -8,7 +8,7 @@ authors.workspace = true
 description = "Reusable TUI widgets for Fusabi applications (stream list, item list, preview pane, etc.)"
 
 [dependencies]
-fusabi-streams-core.workspace = true
+scryforge-provider-core.workspace = true
 fusabi-tui-core.workspace = true
 ratatui.workspace = true
 

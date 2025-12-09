@@ -6,7 +6,7 @@
 //! all available providers. Providers are stored as trait objects to enable runtime
 //! polymorphism.
 
-use fusabi_streams_core::prelude::*;
+use scryforge_provider_core::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 

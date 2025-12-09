@@ -8,7 +8,7 @@
 
 use async_trait::async_trait;
 use chrono::Utc;
-use fusabi_streams_core::prelude::*;
+use scryforge_provider_core::prelude::*;
 
 /// A dummy provider that returns static test data.
 pub struct DummyProvider;

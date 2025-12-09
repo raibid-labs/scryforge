@@ -4,7 +4,7 @@
 //! from the daemon via JSON-RPC over HTTP.
 
 use anyhow::{Context, Result};
-use fusabi_streams_core::{Item, Stream};
+use scryforge_provider_core::{Item, Stream};
 use jsonrpsee::core::client::ClientT;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;

@@ -29,7 +29,7 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 use directories::ProjectDirs;
-use fusabi_streams_core::{Item, ItemId, Stream, StreamId};
+use scryforge_provider_core::{Item, ItemId, Stream, StreamId};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -330,11 +330,11 @@ impl Cache for SqliteCache {
                 let metadata_json: String = row.get(8)?;
 
                 let stream_type = match stream_type_str.as_str() {
-                    "Feed" => fusabi_streams_core::StreamType::Feed,
-                    "Collection" => fusabi_streams_core::StreamType::Collection,
-                    "SavedItems" => fusabi_streams_core::StreamType::SavedItems,
-                    "Community" => fusabi_streams_core::StreamType::Community,
-                    other => fusabi_streams_core::StreamType::Custom(other.to_string()),
+                    "Feed" => scryforge_provider_core::StreamType::Feed,
+                    "Collection" => scryforge_provider_core::StreamType::Collection,
+                    "SavedItems" => scryforge_provider_core::StreamType::SavedItems,
+                    "Community" => scryforge_provider_core::StreamType::Community,
+                    other => scryforge_provider_core::StreamType::Custom(other.to_string()),
                 };
 
                 let metadata = Self::deserialize_metadata(&metadata_json)
@@ -382,11 +382,11 @@ impl Cache for SqliteCache {
                 let metadata_json: String = row.get(8)?;
 
                 let stream_type = match stream_type_str.as_str() {
-                    "Feed" => fusabi_streams_core::StreamType::Feed,
-                    "Collection" => fusabi_streams_core::StreamType::Collection,
-                    "SavedItems" => fusabi_streams_core::StreamType::SavedItems,
-                    "Community" => fusabi_streams_core::StreamType::Community,
-                    other => fusabi_streams_core::StreamType::Custom(other.to_string()),
+                    "Feed" => scryforge_provider_core::StreamType::Feed,
+                    "Collection" => scryforge_provider_core::StreamType::Collection,
+                    "SavedItems" => scryforge_provider_core::StreamType::SavedItems,
+                    "Community" => scryforge_provider_core::StreamType::Community,
+                    other => scryforge_provider_core::StreamType::Custom(other.to_string()),
                 };
 
                 let metadata = Self::deserialize_metadata(&metadata_json)
@@ -459,11 +459,11 @@ impl Cache for SqliteCache {
 
         for stream in streams {
             let stream_type_str = match &stream.stream_type {
-                fusabi_streams_core::StreamType::Feed => "Feed",
-                fusabi_streams_core::StreamType::Collection => "Collection",
-                fusabi_streams_core::StreamType::SavedItems => "SavedItems",
-                fusabi_streams_core::StreamType::Community => "Community",
-                fusabi_streams_core::StreamType::Custom(s) => s.as_str(),
+                scryforge_provider_core::StreamType::Feed => "Feed",
+                scryforge_provider_core::StreamType::Collection => "Collection",
+                scryforge_provider_core::StreamType::SavedItems => "SavedItems",
+                scryforge_provider_core::StreamType::Community => "Community",
+                scryforge_provider_core::StreamType::Custom(s) => s.as_str(),
             };
 
             let metadata_json = Self::serialize_metadata(&stream.metadata)?;
@@ -729,7 +729,7 @@ impl SqliteCache {
                 Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e))
             ))?;
 
-        let author = author_name.map(|name| fusabi_streams_core::Author {
+        let author = author_name.map(|name| scryforge_provider_core::Author {
             name,
             email: author_email,
             url: author_url,
@@ -776,8 +776,8 @@ impl SqliteCache {
     }
 
     /// Serialize item content to type and JSON data.
-    fn serialize_content(content: &fusabi_streams_core::ItemContent) -> Result<(String, String)> {
-        use fusabi_streams_core::ItemContent;
+    fn serialize_content(content: &scryforge_provider_core::ItemContent) -> Result<(String, String)> {
+        use scryforge_provider_core::ItemContent;
 
         let (content_type, data) = match content {
             ItemContent::Text(text) => ("Text", serde_json::json!({"text": text})),
@@ -851,8 +851,8 @@ impl SqliteCache {
     }
 
     /// Deserialize item content from type and JSON data.
-    fn deserialize_content(content_type: &str, content_data: &str) -> Result<fusabi_streams_core::ItemContent> {
-        use fusabi_streams_core::ItemContent;
+    fn deserialize_content(content_type: &str, content_data: &str) -> Result<scryforge_provider_core::ItemContent> {
+        use scryforge_provider_core::ItemContent;
 
         let data: serde_json::Value = serde_json::from_str(content_data)?;
 
@@ -953,7 +953,7 @@ impl SqliteCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fusabi_streams_core::{ItemContent, StreamType};
+    use scryforge_provider_core::{ItemContent, StreamType};
     use tempfile::TempDir;
 
     fn create_test_cache() -> Result<SqliteCache> {
@@ -985,7 +985,7 @@ mod tests {
             stream_id: StreamId(stream_id.to_string()),
             title: format!("Test Item {}", id),
             content: ItemContent::Text("Test content".to_string()),
-            author: Some(fusabi_streams_core::Author {
+            author: Some(scryforge_provider_core::Author {
                 name: "Test Author".to_string(),
                 email: Some("test@example.com".to_string()),
                 url: None,

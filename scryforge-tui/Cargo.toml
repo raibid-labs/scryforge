@@ -12,7 +12,7 @@ name = "scryforge-tui"
 path = "src/main.rs"
 
 [dependencies]
-fusabi-streams-core.workspace = true
+scryforge-provider-core.workspace = true
 fusabi-tui-core.workspace = true
 fusabi-tui-widgets.workspace = true
 chrono.workspace = true

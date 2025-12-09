@@ -12,7 +12,7 @@ name = "scryforge-daemon"
 path = "src/main.rs"
 
 [dependencies]
-fusabi-streams-core.workspace = true
+scryforge-provider-core.workspace = true
 provider-dummy = { path = "../providers/provider-dummy" }
 tokio.workspace = true
 serde.workspace = true

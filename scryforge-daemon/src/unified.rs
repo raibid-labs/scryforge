@@ -7,7 +7,7 @@
 //! - Unified "All Feeds" view aggregating items from all feed streams
 
 use chrono::{DateTime, Utc};
-use fusabi_streams_core::prelude::*;
+use scryforge_provider_core::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;

@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/fusabi-streams-core",
+    "crates/scryforge-provider-core",
     "crates/fusabi-tui-core",
     "crates/fusabi-tui-widgets",
     "scryforge-daemon",
@@ -55,7 +55,7 @@ chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.10", features = ["v4", "serde"] }
 
 # Internal crates
-fusabi-streams-core = { path = "crates/fusabi-streams-core" }
+scryforge-provider-core = { path = "crates/scryforge-provider-core" }
 fusabi-tui-core = { path = "crates/fusabi-tui-core" }
 fusabi-tui-widgets = { path = "crates/fusabi-tui-widgets" }
 scryforge-sigilforge-client = { path = "scryforge-sigilforge-client" }

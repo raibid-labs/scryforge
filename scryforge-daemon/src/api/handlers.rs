@@ -4,7 +4,7 @@
 //! that return dummy data for now (Phase 2 will wire up actual providers).
 
 use chrono::Utc;
-use fusabi_streams_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
+use scryforge_provider_core::{Item, ItemContent, ItemId, Stream, StreamId, StreamType};
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::proc_macros::rpc;
 use serde::{Deserialize, Serialize};
@@ -171,7 +171,7 @@ impl<C: Cache + 'static> ApiImpl<C> {
                         body_html: None,
                         snippet: "Just a reminder about our meeting...".to_string(),
                     },
-                    author: Some(fusabi_streams_core::Author {
+                    author: Some(scryforge_provider_core::Author {
                         name: "John Doe".to_string(),
                         email: Some("john@example.com".to_string()),
                         url: None,
@@ -198,7 +198,7 @@ impl<C: Cache + 'static> ApiImpl<C> {
                         body_html: None,
                         snippet: "Your order #12345 has shipped...".to_string(),
                     },
-                    author: Some(fusabi_streams_core::Author {
+                    author: Some(scryforge_provider_core::Author {
                         name: "Shop Support".to_string(),
                         email: Some("support@shop.com".to_string()),
                         url: None,
@@ -226,7 +226,7 @@ impl<C: Cache + 'static> ApiImpl<C> {
                         ),
                         full_content: None,
                     },
-                    author: Some(fusabi_streams_core::Author {
+                    author: Some(scryforge_provider_core::Author {
                         name: "rustdev".to_string(),
                         email: None,
                         url: None,
@@ -249,7 +249,7 @@ impl<C: Cache + 'static> ApiImpl<C> {
                         summary: Some("The Rust team is happy to announce a new version of Rust...".to_string()),
                         full_content: None,
                     },
-                    author: Some(fusabi_streams_core::Author {
+                    author: Some(scryforge_provider_core::Author {
                         name: "Rust Blog".to_string(),
                         email: None,
                         url: Some("https://blog.rust-lang.org".to_string()),
@@ -276,7 +276,7 @@ impl<C: Cache + 'static> ApiImpl<C> {
                         duration_ms: Some(210000),
                         artists: vec!["Example Artist".to_string()],
                     },
-                    author: Some(fusabi_streams_core::Author {
+                    author: Some(scryforge_provider_core::Author {
                         name: "Example Artist".to_string(),
                         email: None,
                         url: None,

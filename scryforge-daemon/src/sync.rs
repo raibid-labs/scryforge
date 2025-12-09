@@ -40,7 +40,7 @@
 
 use anyhow::{Context, Result};
 use chrono::{DateTime, Duration, Utc};
-use fusabi_streams_core::prelude::*;
+use scryforge_provider_core::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -480,7 +480,7 @@ mod tests {
             "Mock Provider"
         }
 
-        async fn health_check(&self) -> fusabi_streams_core::Result<ProviderHealth> {
+        async fn health_check(&self) -> scryforge_provider_core::Result<ProviderHealth> {
             Ok(ProviderHealth {
                 is_healthy: true,
                 message: None,
@@ -489,7 +489,7 @@ mod tests {
             })
         }
 
-        async fn sync(&self) -> fusabi_streams_core::Result<SyncResult> {
+        async fn sync(&self) -> scryforge_provider_core::Result<SyncResult> {
             if self.should_fail {
                 Err(StreamError::Provider("Mock sync failure".to_string()))
             } else {
@@ -508,11 +508,11 @@ mod tests {
             ProviderCapabilities::default()
         }
 
-        async fn available_actions(&self, _item: &Item) -> fusabi_streams_core::Result<Vec<Action>> {
+        async fn available_actions(&self, _item: &Item) -> scryforge_provider_core::Result<Vec<Action>> {
             Ok(vec![])
         }
 
-        async fn execute_action(&self, _item: &Item, _action: &Action) -> fusabi_streams_core::Result<ActionResult> {
+        async fn execute_action(&self, _item: &Item, _action: &Action) -> scryforge_provider_core::Result<ActionResult> {
             Ok(ActionResult {
                 success: true,
                 message: None,

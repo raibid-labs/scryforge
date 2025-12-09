@@ -1,9 +1,8 @@
-//! # fusabi-streams-core
+//! # scryforge-provider-core
 //!
-//! Core traits and types for stream-based information providers in the Fusabi ecosystem.
+//! Core traits and types for Scryforge providers.
 //!
-//! This crate defines the fundamental abstractions used by Scryforge and other
-//! Fusabi-powered applications that work with information streams:
+//! This crate defines the fundamental abstractions for information stream providers:
 //!
 //! - [`Stream`] - A logical feed or collection (inbox, playlist, subreddit, etc.)
 //! - [`Item`] - An entry within a stream (email, article, video, track, etc.)
@@ -18,7 +17,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! fusabi-streams-core = { version = "0.1", features = ["sigilforge"] }
+//! scryforge-provider-core = { version = "0.1", features = ["sigilforge"] }
 //! ```
 
 use async_trait::async_trait;
@@ -478,7 +477,7 @@ pub mod auth {
     //! # Example
     //!
     //! ```no_run
-    //! use fusabi_streams_core::auth::{TokenFetcher, MockTokenFetcher};
+    //! use scryforge_provider_core::auth::{TokenFetcher, MockTokenFetcher};
     //! use std::sync::Arc;
     //!
     //! struct MyProvider {
