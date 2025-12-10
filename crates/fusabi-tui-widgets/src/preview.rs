@@ -312,6 +312,14 @@ fn render_video_content<'a>(
         ]));
     }
 
+    // Published date
+    if let Some(published) = item.published {
+        lines.push(Line::from(vec![
+            Span::styled("Published: ", Style::default().fg(theme.muted)),
+            Span::raw(published.format("%Y-%m-%d").to_string()),
+        ]));
+    }
+
     // Duration
     if let Some(seconds) = duration_seconds {
         let hours = seconds / 3600;
@@ -334,6 +342,26 @@ fn render_video_content<'a>(
             Span::styled("Views: ", Style::default().fg(theme.muted)),
             Span::raw(format_number(views)),
         ]));
+    }
+
+    // Like count from metadata
+    if let Some(like_count_str) = item.metadata.get("like_count") {
+        if let Ok(likes) = like_count_str.parse::<u64>() {
+            lines.push(Line::from(vec![
+                Span::styled("Likes: ", Style::default().fg(theme.muted)),
+                Span::raw(format_number(likes)),
+            ]));
+        }
+    }
+
+    // Comment count from metadata
+    if let Some(comment_count_str) = item.metadata.get("comment_count") {
+        if let Ok(comments) = comment_count_str.parse::<u64>() {
+            lines.push(Line::from(vec![
+                Span::styled("Comments: ", Style::default().fg(theme.muted)),
+                Span::raw(format_number(comments)),
+            ]));
+        }
     }
 
     // URL

@@ -131,6 +131,10 @@ struct ContentDetails {
 struct Statistics {
     #[serde(rename = "viewCount")]
     view_count: Option<String>,
+    #[serde(rename = "likeCount")]
+    like_count: Option<String>,
+    #[serde(rename = "commentCount")]
+    comment_count: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -341,10 +345,29 @@ impl YouTubeProvider {
             .and_then(|cd| cd.duration)
             .and_then(|d| Self::parse_duration(&d));
 
-        let view_count = video
-            .statistics
-            .and_then(|s| s.view_count)
+        let statistics = video.statistics;
+        let view_count = statistics
+            .as_ref()
+            .and_then(|s| s.view_count.as_ref())
             .and_then(|vc| vc.parse::<u64>().ok());
+
+        let like_count = statistics
+            .as_ref()
+            .and_then(|s| s.like_count.as_ref())
+            .and_then(|lc| lc.parse::<u64>().ok());
+
+        let comment_count = statistics
+            .as_ref()
+            .and_then(|s| s.comment_count.as_ref())
+            .and_then(|cc| cc.parse::<u64>().ok());
+
+        let mut metadata = HashMap::new();
+        if let Some(likes) = like_count {
+            metadata.insert("like_count".to_string(), likes.to_string());
+        }
+        if let Some(comments) = comment_count {
+            metadata.insert("comment_count".to_string(), comments.to_string());
+        }
 
         Item {
             id: ItemId::new("youtube", &video_id),
@@ -371,7 +394,7 @@ impl YouTubeProvider {
             is_read: false,
             is_saved: false,
             tags: vec![],
-            metadata: HashMap::new(),
+            metadata,
         }
     }
 
@@ -477,6 +500,20 @@ impl Provider for YouTubeProvider {
                 description: "Copy video URL to clipboard".to_string(),
                 kind: ActionKind::CopyLink,
                 keyboard_shortcut: Some("c".to_string()),
+            },
+            Action {
+                id: "copy_short_link".to_string(),
+                name: "Copy Short Link".to_string(),
+                description: "Copy youtu.be short URL".to_string(),
+                kind: ActionKind::CopyLink,
+                keyboard_shortcut: Some("y".to_string()),
+            },
+            Action {
+                id: "open_at_time".to_string(),
+                name: "Open at Timestamp".to_string(),
+                description: "Open video at a specific time (format: 1:23:45 or 5:30)".to_string(),
+                kind: ActionKind::OpenInBrowser,
+                keyboard_shortcut: Some("t".to_string()),
             },
             Action {
                 id: "save".to_string(),
@@ -1191,6 +1228,8 @@ mod tests {
             }),
             statistics: Some(Statistics {
                 view_count: Some("1000".to_string()),
+                like_count: Some("50".to_string()),
+                comment_count: Some("10".to_string()),
             }),
         };
 
