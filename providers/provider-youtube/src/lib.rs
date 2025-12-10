@@ -489,8 +489,8 @@ impl Provider for YouTubeProvider {
     }
 
     async fn execute_action(&self, item: &Item, action: &Action) -> Result<ActionResult> {
-        match action.kind {
-            ActionKind::OpenInBrowser => {
+        match action.id.as_str() {
+            "open" => {
                 if let Some(url) = &item.url {
                     Ok(ActionResult {
                         success: true,
@@ -505,12 +505,45 @@ impl Provider for YouTubeProvider {
                     })
                 }
             }
-            ActionKind::CopyLink => {
+            "copy_link" => {
                 if let Some(url) = &item.url {
                     Ok(ActionResult {
                         success: true,
                         message: Some("Link copied to clipboard".to_string()),
                         data: Some(serde_json::json!({ "url": url })),
+                    })
+                } else {
+                    Ok(ActionResult {
+                        success: false,
+                        message: Some("No URL available".to_string()),
+                        data: None,
+                    })
+                }
+            }
+            "copy_short_link" => {
+                // Extract video ID from item.id (format: "youtube:VIDEO_ID")
+                let video_id = item.id.0.strip_prefix("youtube:").unwrap_or(&item.id.0);
+                let short_url = format!("https://youtu.be/{}", video_id);
+                Ok(ActionResult {
+                    success: true,
+                    message: Some("Short link copied to clipboard".to_string()),
+                    data: Some(serde_json::json!({ "url": short_url })),
+                })
+            }
+            "open_at_time" => {
+                // This action requires a timestamp parameter
+                // The TUI will need to prompt for input and pass it via action data
+                // For now, return the base URL and let the client handle timestamp input
+                if let Some(url) = &item.url {
+                    Ok(ActionResult {
+                        success: true,
+                        message: Some("Enter timestamp (e.g., 1:23:45) to open at that time".to_string()),
+                        data: Some(serde_json::json!({
+                            "url": url,
+                            "requires_input": true,
+                            "input_prompt": "Enter timestamp (e.g., 5:30 or 1:23:45):",
+                            "input_type": "timestamp"
+                        })),
                     })
                 } else {
                     Ok(ActionResult {
@@ -1131,10 +1164,17 @@ mod tests {
         };
 
         let actions = provider.available_actions(&item).await.unwrap();
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 5);
+        assert_eq!(actions[0].id, "open");
         assert_eq!(actions[0].kind, ActionKind::OpenInBrowser);
+        assert_eq!(actions[1].id, "copy_link");
         assert_eq!(actions[1].kind, ActionKind::CopyLink);
-        assert_eq!(actions[2].kind, ActionKind::Save);
+        assert_eq!(actions[2].id, "copy_short_link");
+        assert_eq!(actions[2].kind, ActionKind::CopyLink);
+        assert_eq!(actions[3].id, "open_at_time");
+        assert_eq!(actions[3].kind, ActionKind::OpenInBrowser);
+        assert_eq!(actions[4].id, "save");
+        assert_eq!(actions[4].kind, ActionKind::Save);
     }
 
     #[tokio::test]
