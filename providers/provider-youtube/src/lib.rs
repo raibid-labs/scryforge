@@ -423,13 +423,38 @@ impl YouTubeProvider {
         format!("https://youtu.be/{}", video_id)
     }
 
-    /// Check if yt-dlp is available on the system.
-    fn is_yt_dlp_available() -> bool {
-        std::process::Command::new("yt-dlp")
+    /// Check if yt-dlp or youtube-dl is available in PATH.
+    fn find_download_tool() -> Option<&'static str> {
+        use std::process::Command;
+
+        // Try yt-dlp first (preferred)
+        if Command::new("yt-dlp")
             .arg("--version")
             .output()
-            .is_ok()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some("yt-dlp");
+        }
+
+        // Fall back to youtube-dl
+        if Command::new("youtube-dl")
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+        {
+            return Some("youtube-dl");
+        }
+
+        None
     }
+
+    /// Generate download command for a video.
+    fn generate_download_command(tool: &str, video_url: &str) -> String {
+        format!("{} \"{}\"", tool, video_url)
+    }
+
 
     /// Parse RFC 3339 timestamp to DateTime<Utc>.
     fn parse_timestamp(timestamp: &str) -> Option<DateTime<Utc>> {
@@ -534,6 +559,64 @@ impl YouTubeProvider {
             .await?;
 
         Ok(response.items)
+    }
+
+    /// Rate a video (like, dislike, or none).
+    async fn rate_video(&self, video_id: &str, rating: &str) -> Result<()> {
+        let token = self.get_access_token().await?;
+        let url = format!("{}/videos/rate", Self::API_BASE);
+
+        let response = self.client
+            .post(&url)
+            .bearer_auth(&token)
+            .query(&[("id", video_id), ("rating", rating)])
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to rate video: {} - {}", status, error_text
+            )));
+        }
+
+        Ok(())
+    }
+
+    /// Subscribe to a channel.
+    async fn subscribe_to_channel(&self, channel_id: &str) -> Result<()> {
+        let token = self.get_access_token().await?;
+        let url = format!("{}/subscriptions", Self::API_BASE);
+
+        let body = serde_json::json!({
+            "snippet": {
+                "resourceId": {
+                    "kind": "youtube#channel",
+                    "channelId": channel_id
+                }
+            }
+        });
+
+        let response = self.client
+            .post(&url)
+            .bearer_auth(&token)
+            .query(&[("part", "snippet")])
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| StreamError::Network(e.to_string()))?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let error_text = response.text().await.unwrap_or_default();
+            return Err(StreamError::Provider(format!(
+                "Failed to subscribe: {} - {}", status, error_text
+            )));
+        }
+
+        Ok(())
     }
 }
 
@@ -643,6 +726,27 @@ impl Provider for YouTubeProvider {
                 kind: ActionKind::Save,
                 keyboard_shortcut: Some("s".to_string()),
             },
+            Action {
+                id: "like".to_string(),
+                name: "Like Video".to_string(),
+                description: "Like this video".to_string(),
+                kind: ActionKind::Custom("like".to_string()),
+                keyboard_shortcut: Some("L".to_string()),
+            },
+            Action {
+                id: "unlike".to_string(),
+                name: "Unlike Video".to_string(),
+                description: "Remove like from this video".to_string(),
+                kind: ActionKind::Custom("unlike".to_string()),
+                keyboard_shortcut: Some("U".to_string()),
+            },
+            Action {
+                id: "subscribe".to_string(),
+                name: "Subscribe to Channel".to_string(),
+                description: "Subscribe to this video's channel".to_string(),
+                kind: ActionKind::Custom("subscribe".to_string()),
+                keyboard_shortcut: Some("S".to_string()),
+            },
         ])
     }
 
@@ -723,36 +827,93 @@ impl Provider for YouTubeProvider {
                     }
                 }
                 "download" => {
-                    if !Self::is_yt_dlp_available() {
-                        return Ok(ActionResult {
-                            success: false,
-                            message: Some(
-                                "yt-dlp is not installed. Install it with: pip install yt-dlp"
-                                    .to_string(),
-                            ),
-                            data: None,
-                        });
-                    }
-
                     if let Some(url) = &item.url {
-                        // Spawn yt-dlp in the background
-                        // The client should handle the actual execution
-                        Ok(ActionResult {
-                            success: true,
-                            message: Some("Starting download with yt-dlp...".to_string()),
-                            data: Some(serde_json::json!({
-                                "command": "yt-dlp",
-                                "args": [url],
-                                "url": url
-                            })),
-                        })
+                        match Self::find_download_tool() {
+                            Some(tool) => {
+                                let command = Self::generate_download_command(tool, url);
+                                Ok(ActionResult {
+                                    success: true,
+                                    message: Some(format!("Run: {}", command)),
+                                    data: Some(serde_json::json!({
+                                        "tool": tool,
+                                        "url": url,
+                                        "command": command,
+                                        "action": "execute_command"
+                                    })),
+                                })
+                            }
+                            None => Ok(ActionResult {
+                                success: false,
+                                message: Some("yt-dlp or youtube-dl not found. Install with: pip install yt-dlp".to_string()),
+                                data: Some(serde_json::json!({
+                                    "install_hint": "pip install yt-dlp",
+                                    "url": url
+                                })),
+                            }),
+                        }
                     } else {
                         Ok(ActionResult {
                             success: false,
-                            message: Some("No URL available".to_string()),
+                            message: Some("No URL available for download".to_string()),
                             data: None,
                         })
                     }
+                }
+                "like" => {
+                    let video_id = item.id.0.strip_prefix("youtube:").unwrap_or(&item.id.0);
+                    match self.rate_video(video_id, "like").await {
+                        Ok(()) => Ok(ActionResult {
+                            success: true,
+                            message: Some("Video liked!".to_string()),
+                            data: None,
+                        }),
+                        Err(e) => Ok(ActionResult {
+                            success: false,
+                            message: Some(format!("Failed to like: {}", e)),
+                            data: None,
+                        }),
+                    }
+                }
+                "unlike" => {
+                    let video_id = item.id.0.strip_prefix("youtube:").unwrap_or(&item.id.0);
+                    match self.rate_video(video_id, "none").await {
+                        Ok(()) => Ok(ActionResult {
+                            success: true,
+                            message: Some("Like removed".to_string()),
+                            data: None,
+                        }),
+                        Err(e) => Ok(ActionResult {
+                            success: false,
+                            message: Some(format!("Failed to unlike: {}", e)),
+                            data: None,
+                        }),
+                    }
+                }
+                "subscribe" => {
+                    // Get channel_id from item author URL or metadata
+                    if let Some(ref author) = item.author {
+                        if let Some(ref url) = author.url {
+                            if let Some(channel_id) = url.strip_prefix("https://www.youtube.com/channel/") {
+                                match self.subscribe_to_channel(channel_id).await {
+                                    Ok(()) => return Ok(ActionResult {
+                                        success: true,
+                                        message: Some(format!("Subscribed to {}!", author.name)),
+                                        data: None,
+                                    }),
+                                    Err(e) => return Ok(ActionResult {
+                                        success: false,
+                                        message: Some(format!("Failed to subscribe: {}", e)),
+                                        data: None,
+                                    }),
+                                }
+                            }
+                        }
+                    }
+                    Ok(ActionResult {
+                        success: false,
+                        message: Some("Could not determine channel ID".to_string()),
+                        data: None,
+                    })
                 }
                 _ => Ok(ActionResult {
                     success: false,
@@ -1373,7 +1534,7 @@ mod tests {
         };
 
         let actions = provider.available_actions(&item).await.unwrap();
-        assert_eq!(actions.len(), 6);
+        assert_eq!(actions.len(), 9);
         assert_eq!(actions[0].kind, ActionKind::OpenInBrowser);
         assert_eq!(actions[1].kind, ActionKind::CopyLink);
         assert_eq!(
@@ -1716,4 +1877,41 @@ mod tests {
             panic!("Expected data in result");
         }
     }
+    #[tokio::test]
+    async fn test_like_action() {
+        let provider = create_test_provider();
+        let item = create_test_video_item();
+        let actions = provider.available_actions(&item).await.unwrap();
+        assert!(actions.iter().any(|a| a.id == "like"));
+        assert!(actions.iter().any(|a| a.id == "unlike"));
+        assert!(actions.iter().any(|a| a.id == "subscribe"));
+    }
+
+    fn create_test_video_item() -> Item {
+        Item {
+            id: ItemId::new("youtube", "test-video"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test Video".to_string(),
+            content: ItemContent::Video {
+                description: "Test description".to_string(),
+                duration_seconds: Some(300),
+                view_count: Some(1000),
+            },
+            author: Some(Author {
+                name: "Test Channel".to_string(),
+                email: None,
+                url: Some("https://www.youtube.com/channel/UCtest".to_string()),
+                avatar_url: None,
+            }),
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=test-video".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
 }
