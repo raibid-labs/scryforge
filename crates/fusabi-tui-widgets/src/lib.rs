@@ -268,22 +268,21 @@ impl<'a> ItemListWidget<'a> {
 
                 // Duration for video items with color coding
                 if let scryforge_provider_core::ItemContent::Video {
-                    duration_seconds, ..
+                    duration_seconds: Some(seconds),
+                    ..
                 } = &item.content
                 {
-                    if let Some(seconds) = duration_seconds {
-                        use crate::time::duration_color;
-                        let hours = seconds / 3600;
-                        let minutes = (seconds % 3600) / 60;
-                        let secs = seconds % 60;
-                        let duration_str = if hours > 0 {
-                            format!(" [{}:{:02}:{:02}]", hours, minutes, secs)
-                        } else {
-                            format!(" [{}:{:02}]", minutes, secs)
-                        };
-                        let color = duration_color(*seconds);
-                        spans.push(Span::styled(duration_str, Style::default().fg(color)));
-                    }
+                    use crate::time::duration_color;
+                    let hours = seconds / 3600;
+                    let minutes = (seconds % 3600) / 60;
+                    let secs = seconds % 60;
+                    let duration_str = if hours > 0 {
+                        format!(" [{}:{:02}:{:02}]", hours, minutes, secs)
+                    } else {
+                        format!(" [{}:{:02}]", minutes, secs)
+                    };
+                    let color = duration_color(*seconds);
+                    spans.push(Span::styled(duration_str, Style::default().fg(color)));
                 }
 
                 let style = if is_selected {
