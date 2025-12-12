@@ -117,12 +117,17 @@ impl RedditProvider {
     /// # Example
     ///
     /// ```no_run
+    /// # #[cfg(unix)]
+    /// # fn main() {
     /// use provider_reddit::RedditProvider;
     /// use scryforge_provider_core::auth::SigilforgeClient;
     /// use std::sync::Arc;
     ///
     /// let token_fetcher = Arc::new(SigilforgeClient::with_default_path());
     /// let provider = RedditProvider::new(token_fetcher, "personal".to_string());
+    /// # }
+    /// # #[cfg(not(unix))]
+    /// # fn main() {}
     /// ```
     pub fn new(token_fetcher: Arc<dyn auth::TokenFetcher>, account: String) -> Self {
         let client = Client::builder()
