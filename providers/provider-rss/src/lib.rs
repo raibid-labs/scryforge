@@ -89,7 +89,7 @@ impl From<RssError> for StreamError {
 // ============================================================================
 
 /// Configuration for the RSS provider.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RssProviderConfig {
     /// List of feed URLs to fetch
     pub feeds: Vec<String>,
@@ -135,12 +135,6 @@ impl RssProviderConfig {
     }
 }
 
-impl Default for RssProviderConfig {
-    fn default() -> Self {
-        Self { feeds: Vec::new() }
-    }
-}
-
 // ============================================================================
 // RSS Provider
 // ============================================================================
@@ -170,7 +164,7 @@ impl RssProvider {
         let response = self.client.get(url).send().await?.error_for_status()?;
 
         let content = response.bytes().await?;
-        Ok(parser::parse(&content[..]).map_err(|e| RssError::Parse(e.to_string()))?)
+        parser::parse(&content[..]).map_err(|e| RssError::Parse(e.to_string()))
     }
 
     /// Convert a feed-rs entry to a Scryforge Item.
@@ -517,8 +511,8 @@ impl HasFeeds for RssProvider {
 
         // Sort by published date (newest first)
         items.sort_by(|a, b| {
-            let a_date = a.published.unwrap_or_else(|| Utc::now());
-            let b_date = b.published.unwrap_or_else(|| Utc::now());
+            let a_date = a.published.unwrap_or_else(Utc::now);
+            let b_date = b.published.unwrap_or_else(Utc::now);
             b_date.cmp(&a_date)
         });
 

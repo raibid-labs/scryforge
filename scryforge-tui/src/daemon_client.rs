@@ -13,6 +13,7 @@ use tracing::{debug, error, info};
 
 /// Messages sent from the UI thread to the async client thread.
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum Command {
     /// Fetch all available streams
     FetchStreams,

@@ -43,9 +43,10 @@ pub struct UnifiedSavedOptions {
 }
 
 /// Sort order for saved items.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum SortOrder {
     /// Newest saved items first (default)
+    #[default]
     SavedDateDesc,
     /// Oldest saved items first
     SavedDateAsc,
@@ -53,12 +54,6 @@ pub enum SortOrder {
     PublishedDateDesc,
     /// Oldest published items first
     PublishedDateAsc,
-}
-
-impl Default for SortOrder {
-    fn default() -> Self {
-        Self::SavedDateDesc
-    }
 }
 
 /// Unified view for saved items across all providers.
@@ -265,20 +260,15 @@ pub struct UnifiedFeedOptions {
 }
 
 /// Sort order for unified feeds.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FeedSortOrder {
     /// Newest items first (by published date)
+    #[default]
     NewestFirst,
     /// Oldest items first (by published date)
     OldestFirst,
     /// Alphabetically by title
     Alphabetical,
-}
-
-impl Default for FeedSortOrder {
-    fn default() -> Self {
-        Self::NewestFirst
-    }
 }
 
 /// A unified view that aggregates feed items from all providers.
@@ -573,9 +563,10 @@ pub struct UnifiedCollectionMetadata {
 }
 
 /// Sort order for collections.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CollectionSortOrder {
     /// Sort by name (A-Z)
+    #[default]
     NameAsc,
     /// Sort by name (Z-A)
     NameDesc,
@@ -589,12 +580,6 @@ pub enum CollectionSortOrder {
     UpdatedAsc,
     /// Sort by provider name
     Provider,
-}
-
-impl Default for CollectionSortOrder {
-    fn default() -> Self {
-        Self::NameAsc
-    }
 }
 
 /// Filters for collection queries.
@@ -842,6 +827,7 @@ mod tests {
     use chrono::Duration;
 
     // Mock provider for testing
+    #[allow(dead_code)]
     struct MockSavedItemsProvider {
         id: String,
         items: Vec<Item>,
@@ -906,8 +892,8 @@ mod tests {
     #[test]
     fn test_unified_saved_view_creation() {
         let registry = Arc::new(ProviderRegistry::new());
-        let view = UnifiedSavedView::new(registry);
-        assert!(true); // Just ensure it compiles
+        let _view = UnifiedSavedView::new(registry);
+        // Just ensure it compiles and creates successfully
     }
 
     #[test]

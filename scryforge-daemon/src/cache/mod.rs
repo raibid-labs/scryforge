@@ -1137,11 +1137,11 @@ mod tests {
         let cache = create_test_cache()?;
 
         let mut stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         stream.name = "Updated Stream".to_string();
         stream.unread_count = Some(15);
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let streams = cache.get_streams(None)?;
         assert_eq!(streams.len(), 1);
@@ -1156,7 +1156,7 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let item1 = create_test_item("test:item:1", "test:feed:1");
         let item2 = create_test_item("test:item:2", "test:feed:1");
@@ -1177,10 +1177,10 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let item = create_test_item("test:item:1", "test:feed:1");
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         cache.mark_read(&item.id, true)?;
 
@@ -1202,10 +1202,10 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let item = create_test_item("test:item:1", "test:feed:1");
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         cache.mark_starred(&item.id, true)?;
 
@@ -1249,7 +1249,7 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let content_types = vec![
             ItemContent::Text("Plain text".to_string()),
@@ -1300,10 +1300,10 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let item = create_test_item("test:item:1", "test:feed:1");
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         // Delete the stream
         let conn = cache.conn.lock().unwrap();
@@ -1325,7 +1325,7 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let mut item1 = create_test_item("test:item:1", "test:feed:1");
         item1.title = "Rust programming tutorial".to_string();
@@ -1405,7 +1405,7 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let item1 = create_test_item("test:item:1", "test:feed:1");
         let item2 = create_test_item("test:item:2", "test:feed:1");
@@ -1424,10 +1424,10 @@ mod tests {
         let cache = create_test_cache()?;
 
         let stream = create_test_stream("test:feed:1", "test-provider");
-        cache.upsert_streams(&[stream.clone()])?;
+        cache.upsert_streams(std::slice::from_ref(&stream))?;
 
         let item = create_test_item("test:item:1", "test:feed:1");
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         // Mark item as archived
         cache.mark_archived(&item.id, true)?;

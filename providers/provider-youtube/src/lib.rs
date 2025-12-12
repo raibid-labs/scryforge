@@ -65,6 +65,7 @@ impl From<YouTubeError> for StreamError {
 // ============================================================================
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct YouTubeResponse<T> {
     items: Vec<T>,
     #[serde(rename = "nextPageToken")]
@@ -74,12 +75,14 @@ struct YouTubeResponse<T> {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct PageInfo {
     #[serde(rename = "totalResults")]
     total_results: u32,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct YouTubeSubscription {
     id: String,
     snippet: SubscriptionSnippet,
@@ -171,6 +174,7 @@ struct PlaylistContentDetails {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct YouTubePlaylistItem {
     id: String,
     snippet: PlaylistItemSnippet,
@@ -179,6 +183,7 @@ struct YouTubePlaylistItem {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct PlaylistItemSnippet {
     #[serde(rename = "publishedAt")]
     published_at: String,
@@ -194,12 +199,14 @@ struct PlaylistItemSnippet {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct PlaylistItemContentDetails {
     #[serde(rename = "videoId")]
     video_id: String,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct YouTubeChannel {
     id: String,
     snippet: ChannelSnippet,
@@ -207,6 +214,7 @@ struct YouTubeChannel {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ChannelSnippet {
     title: String,
     description: Option<String>,
@@ -214,6 +222,7 @@ struct ChannelSnippet {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct ChannelStatistics {
     #[serde(rename = "videoCount")]
     video_count: Option<String>,
@@ -319,6 +328,7 @@ impl YouTubeProvider {
 
     /// Parse user timestamp input to seconds.
     /// Accepts formats: "1:23:45", "5:30", "45", "1h30m", "5m30s"
+    #[cfg(test)]
     fn parse_user_timestamp(input: &str) -> Option<u32> {
         let input = input.trim();
 
@@ -1022,7 +1032,7 @@ impl HasCollections for YouTubeProvider {
                     .unwrap_or(false)
             })
             .map(|item| item.id.clone())
-            .ok_or_else(|| StreamError::ItemNotFound(format!("Item not found in collection")))?;
+            .ok_or_else(|| StreamError::ItemNotFound("Item not found in collection".to_string()))?;
 
         // Delete the playlist item
         let token = self.get_access_token().await?;
@@ -1259,7 +1269,9 @@ impl HasSavedItems for YouTubeProvider {
                     .unwrap_or(false)
             })
             .map(|item| item.id.clone())
-            .ok_or_else(|| StreamError::ItemNotFound(format!("Item not found in Watch Later")))?;
+            .ok_or_else(|| {
+                StreamError::ItemNotFound("Item not found in Watch Later".to_string())
+            })?;
 
         // Delete the playlist item
         let token = self.get_access_token().await?;

@@ -116,7 +116,7 @@ async fn test_cache_insert_query_verify() -> Result<()> {
     let items = fixtures::create_test_items("test:stream:1", 5);
 
     // Insert stream
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
 
     // Verify stream was inserted
     let retrieved_streams = cache.get_streams(Some("test-provider"))?;
@@ -152,10 +152,10 @@ async fn test_cache_upsert_updates_existing() -> Result<()> {
     let (cache, _temp_dir) = create_test_cache()?;
 
     let stream = fixtures::create_test_stream("test:stream:1", "test-provider", "Test Stream");
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
 
     let mut item = fixtures::create_test_item("test:item:1", "test:stream:1", "Original Title");
-    cache.upsert_items(&[item.clone()])?;
+    cache.upsert_items(std::slice::from_ref(&item))?;
 
     // Verify initial state
     let items = cache.get_items(&stream.id, None)?;
@@ -184,10 +184,10 @@ async fn test_cache_mark_read_and_starred() -> Result<()> {
     let (cache, _temp_dir) = create_test_cache()?;
 
     let stream = fixtures::create_test_stream("test:stream:1", "test-provider", "Test Stream");
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
 
     let item = fixtures::create_test_item("test:item:1", "test:stream:1", "Test Item");
-    cache.upsert_items(&[item.clone()])?;
+    cache.upsert_items(std::slice::from_ref(&item))?;
 
     // Mark as read
     cache.mark_read(&item.id, true)?;
@@ -221,7 +221,7 @@ async fn test_cache_search_with_filters() -> Result<()> {
     let (cache, _temp_dir) = create_test_cache()?;
 
     let stream = fixtures::create_test_stream("test:stream:1", "test-provider", "Test Stream");
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
 
     let items = fixtures::create_mixed_state_items("test:stream:1");
     cache.upsert_items(&items)?;
@@ -445,7 +445,7 @@ async fn test_jsonrpc_items_list() -> Result<()> {
     // Insert test data
     let stream = fixtures::create_test_stream("test:stream:1", "dummy", "Test Stream");
     let items = fixtures::create_test_items("test:stream:1", 3);
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
     cache.upsert_items(&items)?;
 
     let (url, handle) = start_test_server(cache, sync_manager).await?;
@@ -514,8 +514,8 @@ async fn test_jsonrpc_items_save() -> Result<()> {
     // Insert test data
     let stream = fixtures::create_test_stream("test:stream:1", "dummy", "Test Stream");
     let item = fixtures::create_test_item("test:item:1", "test:stream:1", "Test Item");
-    cache.upsert_streams(&[stream.clone()])?;
-    cache.upsert_items(&[item.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
+    cache.upsert_items(std::slice::from_ref(&item))?;
 
     let (url, handle) = start_test_server(cache.clone(), sync_manager).await?;
 
@@ -548,8 +548,8 @@ async fn test_jsonrpc_items_mark_read() -> Result<()> {
     // Insert test data
     let stream = fixtures::create_test_stream("test:stream:1", "dummy", "Test Stream");
     let item = fixtures::create_test_item("test:item:1", "test:stream:1", "Test Item");
-    cache.upsert_streams(&[stream.clone()])?;
-    cache.upsert_items(&[item.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
+    cache.upsert_items(std::slice::from_ref(&item))?;
 
     let (url, handle) = start_test_server(cache.clone(), sync_manager).await?;
 
@@ -671,12 +671,12 @@ async fn test_jsonrpc_sync_trigger() -> Result<()> {
 
 #[tokio::test]
 async fn test_full_integration_insert_sync_query() -> Result<()> {
-    let (registry, cache, sync_manager, _temp_dir) = setup_test_environment().await?;
+    let (_registry, cache, sync_manager, _temp_dir) = setup_test_environment().await?;
 
     // Step 1: Insert test data into cache
     let stream = fixtures::create_test_stream("test:stream:1", "dummy", "Test Stream");
     let items = fixtures::create_test_items("test:stream:1", 10);
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
     cache.upsert_items(&items)?;
 
     // Step 2: Start sync manager
@@ -755,7 +755,7 @@ async fn test_jsonrpc_full_workflow() -> Result<()> {
     // Insert test data
     let stream = fixtures::create_test_stream("test:stream:1", "dummy", "Test Stream");
     let items = fixtures::create_test_items("test:stream:1", 3);
-    cache.upsert_streams(&[stream.clone()])?;
+    cache.upsert_streams(std::slice::from_ref(&stream))?;
     cache.upsert_items(&items)?;
 
     let (url, handle) = start_test_server(cache.clone(), Arc::clone(&sync_manager)).await?;

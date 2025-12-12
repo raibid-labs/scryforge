@@ -268,7 +268,7 @@ name = "Minimal Plugin"
 version = "1.0.0"
 "#;
 
-    let manifest = PluginManifest::from_str(toml).unwrap();
+    let manifest = PluginManifest::parse(toml).unwrap();
     assert_eq!(manifest.plugin.id, "minimal");
     assert_eq!(manifest.plugin.name, "Minimal Plugin");
     assert_eq!(manifest.plugin.version, "1.0.0");
@@ -308,7 +308,7 @@ max_concurrent = 3
 retry_delay_ms = 1000
 "#;
 
-    let manifest = PluginManifest::from_str(toml).unwrap();
+    let manifest = PluginManifest::parse(toml).unwrap();
 
     assert_eq!(manifest.plugin.id, "full-plugin");
     assert_eq!(manifest.plugin.name, "Full Featured Plugin");
@@ -348,7 +348,7 @@ name = "Test"
 version = "1.0.0"
 "#;
 
-    let result = PluginManifest::from_str(toml);
+    let result = PluginManifest::parse(toml);
     assert!(result.is_err());
     assert!(matches!(
         result.unwrap_err(),
@@ -365,7 +365,7 @@ name = ""
 version = "1.0.0"
 "#;
 
-    let result = PluginManifest::from_str(toml);
+    let result = PluginManifest::parse(toml);
     assert!(result.is_err());
 }
 
@@ -378,7 +378,7 @@ name = "Test"
 version = ""
 "#;
 
-    let result = PluginManifest::from_str(toml);
+    let result = PluginManifest::parse(toml);
     assert!(result.is_err());
 }
 
@@ -395,7 +395,7 @@ plugin_type = "provider"
 id = "test-provider"
 "#;
 
-    let manifest = PluginManifest::from_str(provider_toml).unwrap();
+    let manifest = PluginManifest::parse(provider_toml).unwrap();
     assert!(manifest.is_provider());
 
     let action_toml = r#"
@@ -406,7 +406,7 @@ version = "1.0.0"
 plugin_type = "action"
 "#;
 
-    let manifest = PluginManifest::from_str(action_toml).unwrap();
+    let manifest = PluginManifest::parse(action_toml).unwrap();
     assert!(!manifest.is_provider());
 }
 
@@ -515,12 +515,12 @@ fn test_load_invalid_bytecode_file() {
 
 #[test]
 fn test_capability_from_str() {
-    assert_eq!(Capability::from_str("network"), Capability::Network);
-    assert_eq!(Capability::from_str("file_read"), Capability::FileRead);
-    assert_eq!(Capability::from_str("credentials"), Capability::Credentials);
-    assert_eq!(Capability::from_str("cache_read"), Capability::CacheRead);
+    assert_eq!(Capability::parse("network"), Capability::Network);
+    assert_eq!(Capability::parse("file_read"), Capability::FileRead);
+    assert_eq!(Capability::parse("credentials"), Capability::Credentials);
+    assert_eq!(Capability::parse("cache_read"), Capability::CacheRead);
     assert_eq!(
-        Capability::from_str("custom_cap"),
+        Capability::parse("custom_cap"),
         Capability::Custom("custom_cap".to_string())
     );
 }
@@ -574,7 +574,7 @@ name = "Test"
 version = "1.0.0"
 "#;
 
-    let manifest = PluginManifest::from_str(toml).unwrap();
+    let manifest = PluginManifest::parse(toml).unwrap();
     let caps = manifest.capability_set();
 
     assert_eq!(caps.len(), 3);

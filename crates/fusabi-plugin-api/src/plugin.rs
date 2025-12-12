@@ -249,7 +249,7 @@ has_feeds = true
 
     #[test]
     fn test_parse_manifest() {
-        let manifest = PluginManifest::from_str(&create_test_manifest()).unwrap();
+        let manifest = PluginManifest::parse(&create_test_manifest()).unwrap();
         assert_eq!(manifest.plugin.id, "test-plugin");
         assert!(manifest.is_provider());
     }
