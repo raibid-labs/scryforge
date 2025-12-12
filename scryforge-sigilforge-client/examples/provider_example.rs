@@ -2,6 +2,11 @@
 //!
 //! This example shows how a provider can use the TokenFetcher trait to
 //! request authentication tokens from the Sigilforge daemon.
+//!
+//! Note: This example is Unix-only because SigilforgeClient uses Unix sockets.
+
+// This example requires Unix sockets
+#![cfg(unix)]
 
 use scryforge_sigilforge_client::{MockTokenFetcher, SigilforgeClient, TokenFetcher};
 use std::collections::HashMap;
