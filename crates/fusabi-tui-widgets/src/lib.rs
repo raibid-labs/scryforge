@@ -40,6 +40,12 @@ pub use theme::Theme;
 // Time Utilities
 // ============================================================================
 pub mod time;
+
+// ============================================================================
+// Playlist Picker
+// ============================================================================
+pub mod playlist_picker;
+
 // ============================================================================
 // Provider Status
 // ============================================================================
@@ -814,6 +820,7 @@ impl<'a> ToastWidget<'a> {
 
 pub mod prelude {
     pub use crate::{
+        playlist_picker::{PlaylistPicker, PlaylistPickerState},
         time, ItemListWidget, OmnibarWidget, PreviewWidget, ProviderStatus, ProviderSyncStatus,
         StatusBarWidget, StreamListWidget, Theme, Toast, ToastType, ToastWidget,
     };
