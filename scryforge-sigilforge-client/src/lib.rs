@@ -3,16 +3,18 @@
 //! Client library for communicating with the Sigilforge auth daemon.
 //!
 //! This crate provides:
-//! - [`SigilforgeClient`] - Client for fetching tokens from Sigilforge daemon
+//! - [`SigilforgeClient`] - Client for fetching tokens from Sigilforge daemon (Unix only)
 //! - [`TokenFetcher`] - Trait for components that need auth tokens
 //! - [`MockTokenFetcher`] - Mock implementation for testing
 //!
 //! ## Example
 //!
 //! ```no_run
+//! # #[cfg(unix)]
 //! use scryforge_sigilforge_client::{SigilforgeClient, TokenFetcher};
 //! use std::path::PathBuf;
 //!
+//! # #[cfg(unix)]
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = SigilforgeClient::new(PathBuf::from("/tmp/sigilforge.sock"));
 //!
@@ -25,16 +27,27 @@
 //! # Ok(())
 //! # }
 //! ```
+//!
+//! **Note:** `SigilforgeClient` is only available on Unix platforms as it uses
+//! Unix domain sockets for IPC.
 
 use async_trait::async_trait;
+#[cfg(unix)]
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
+#[cfg(unix)]
 use serde_json::json;
 use std::collections::HashMap;
+#[cfg(not(unix))]
+use std::path::PathBuf;
+#[cfg(unix)]
 use std::path::{Path, PathBuf};
 use thiserror::Error;
+#[cfg(unix)]
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+#[cfg(unix)]
 use tokio::net::UnixStream;
+#[cfg(unix)]
 use tracing::debug;
 
 // ============================================================================
@@ -68,33 +81,39 @@ pub enum SigilforgeError {
 pub type Result<T> = std::result::Result<T, SigilforgeError>;
 
 // ============================================================================
-// Response Types
+// Response Types (Unix only)
 // ============================================================================
 
+#[cfg(unix)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct GetTokenResponse {
     token: String,
     expires_at: Option<String>,
 }
 
+#[cfg(unix)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ResolveResponse {
     value: String,
 }
 
 // ============================================================================
-// Client Implementation
+// Client Implementation (Unix only)
 // ============================================================================
 
 /// Client for communicating with Sigilforge daemon over Unix socket.
 ///
 /// The client maintains a connection to the Sigilforge daemon and provides
 /// methods to fetch OAuth tokens and resolve credential references.
+///
+/// **Note:** This struct is only available on Unix platforms.
+#[cfg(unix)]
 #[derive(Debug)]
 pub struct SigilforgeClient {
     socket_path: PathBuf,
 }
 
+#[cfg(unix)]
 impl SigilforgeClient {
     /// Create a new Sigilforge client with the specified socket path.
     ///
@@ -284,6 +303,7 @@ pub trait TokenFetcher: Send + Sync {
     async fn fetch_token(&self, service: &str, account: &str) -> Result<String>;
 }
 
+#[cfg(unix)]
 #[async_trait]
 impl TokenFetcher for SigilforgeClient {
     async fn fetch_token(&self, service: &str, account: &str) -> Result<String> {
@@ -362,25 +382,22 @@ impl TokenFetcher for MockTokenFetcher {
 }
 
 // ============================================================================
-// Utility Functions
+// Utility Functions (Unix only)
 // ============================================================================
 
 /// Get the default socket path for the Sigilforge daemon.
 ///
-/// The path is platform-dependent:
-/// - Unix: `$XDG_RUNTIME_DIR/sigilforge.sock` or `/tmp/sigilforge.sock`
-/// - Windows: `\\.\pipe\sigilforge`
+/// The path is `$XDG_RUNTIME_DIR/sigilforge.sock` or `/tmp/sigilforge.sock`.
+///
+/// **Note:** This function is only available on Unix platforms.
+#[cfg(unix)]
 pub fn default_socket_path() -> PathBuf {
     let dirs = ProjectDirs::from("com", "raibid-labs", "sigilforge");
 
-    if cfg!(unix) {
-        dirs.as_ref()
-            .and_then(|d| d.runtime_dir())
-            .map(|d| d.join("sigilforge.sock"))
-            .unwrap_or_else(|| PathBuf::from("/tmp/sigilforge.sock"))
-    } else {
-        PathBuf::from(r"\\.\pipe\sigilforge")
-    }
+    dirs.as_ref()
+        .and_then(|d| d.runtime_dir())
+        .map(|d| d.join("sigilforge.sock"))
+        .unwrap_or_else(|| PathBuf::from("/tmp/sigilforge.sock"))
 }
 
 // ============================================================================
@@ -391,19 +408,25 @@ pub fn default_socket_path() -> PathBuf {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    use std::path::Path;
+
     #[test]
+    #[cfg(unix)]
     fn test_default_socket_path() {
         let path = default_socket_path();
         assert!(!path.as_os_str().is_empty());
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_client_creation() {
         let client = SigilforgeClient::new(PathBuf::from("/tmp/test.sock"));
         assert_eq!(client.socket_path(), Path::new("/tmp/test.sock"));
     }
 
     #[test]
+    #[cfg(unix)]
     fn test_client_with_default_path() {
         let client = SigilforgeClient::with_default_path();
         assert!(!client.socket_path().as_os_str().is_empty());
@@ -447,6 +470,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[cfg(unix)]
     async fn test_client_unavailable() {
         let client = SigilforgeClient::new(PathBuf::from("/nonexistent/socket.sock"));
         assert!(!client.is_available());
