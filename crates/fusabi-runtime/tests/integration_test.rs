@@ -176,7 +176,9 @@ fn test_discover_single_plugin() {
     assert_eq!(plugin_path.manifest.capabilities, vec!["network"]);
 }
 
+// This test uses XDG_DATA_HOME which is Linux-specific
 #[test]
+#[cfg(target_os = "linux")]
 fn test_discover_multiple_plugins() {
     let temp_dir = TempDir::new().unwrap();
 
