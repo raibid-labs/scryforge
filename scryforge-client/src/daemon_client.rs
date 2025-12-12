@@ -31,15 +31,9 @@ pub enum Command {
     /// Fetch all collections
     FetchCollections,
     /// Add item to collection
-    AddToCollection {
-        collection_id: String,
-        item_id: String,
-    },
+    AddToCollection { collection_id: String, item_id: String },
     /// Remove item from collection
-    RemoveFromCollection {
-        collection_id: String,
-        item_id: String,
-    },
+    RemoveFromCollection { collection_id: String, item_id: String },
     /// Create a new collection
     CreateCollection(String),
     /// Shutdown the client
@@ -211,16 +205,10 @@ impl DaemonClient {
 
     /// Remove an item from a collection.
     pub async fn remove_from_collection(&self, collection_id: &str, item_id: &str) -> Result<()> {
-        debug!(
-            "Removing item {} from collection {}",
-            item_id, collection_id
-        );
+        debug!("Removing item {} from collection {}", item_id, collection_id);
 
         self.client
-            .request::<(), _>(
-                "collections.remove_item",
-                rpc_params![collection_id, item_id],
-            )
+            .request::<(), _>("collections.remove_item", rpc_params![collection_id, item_id])
             .await
             .context("Failed to remove item from collection")?;
 
@@ -370,66 +358,43 @@ pub fn spawn_client_task(
                     }
                     Err(e) => {
                         error!("Failed to fetch collections: {}", e);
-                        let _ = msg_tx.send(Message::Error(format!(
-                            "Failed to fetch collections: {}",
-                            e
-                        )));
+                        let _ = msg_tx.send(Message::Error(format!("Failed to fetch collections: {}", e)));
                     }
                 },
-                Command::AddToCollection {
-                    collection_id,
-                    item_id,
-                } => match client.add_to_collection(&collection_id, &item_id).await {
-                    Ok(()) => {
-                        debug!(
-                            "Successfully added item {} to collection {}",
-                            item_id, collection_id
-                        );
-                        let _ = msg_tx.send(Message::ItemAddedToCollection);
-                    }
-                    Err(e) => {
-                        error!("Failed to add item to collection: {}", e);
-                        let _ = msg_tx.send(Message::Error(format!(
-                            "Failed to add item to collection: {}",
-                            e
-                        )));
-                    }
-                },
-                Command::RemoveFromCollection {
-                    collection_id,
-                    item_id,
-                } => {
-                    match client
-                        .remove_from_collection(&collection_id, &item_id)
-                        .await
-                    {
+                Command::AddToCollection { collection_id, item_id } => {
+                    match client.add_to_collection(&collection_id, &item_id).await {
                         Ok(()) => {
-                            debug!(
-                                "Successfully removed item {} from collection {}",
-                                item_id, collection_id
-                            );
+                            debug!("Successfully added item {} to collection {}", item_id, collection_id);
+                            let _ = msg_tx.send(Message::ItemAddedToCollection);
+                        }
+                        Err(e) => {
+                            error!("Failed to add item to collection: {}", e);
+                            let _ = msg_tx.send(Message::Error(format!("Failed to add item to collection: {}", e)));
+                        }
+                    }
+                },
+                Command::RemoveFromCollection { collection_id, item_id } => {
+                    match client.remove_from_collection(&collection_id, &item_id).await {
+                        Ok(()) => {
+                            debug!("Successfully removed item {} from collection {}", item_id, collection_id);
                             let _ = msg_tx.send(Message::ItemRemovedFromCollection);
                         }
                         Err(e) => {
                             error!("Failed to remove item from collection: {}", e);
-                            let _ = msg_tx.send(Message::Error(format!(
-                                "Failed to remove item from collection: {}",
-                                e
-                            )));
+                            let _ = msg_tx.send(Message::Error(format!("Failed to remove item from collection: {}", e)));
                         }
                     }
-                }
-                Command::CreateCollection(name) => match client.create_collection(&name).await {
-                    Ok(collection) => {
-                        debug!("Successfully created collection: {}", name);
-                        let _ = msg_tx.send(Message::CollectionCreated(collection));
-                    }
-                    Err(e) => {
-                        error!("Failed to create collection: {}", e);
-                        let _ = msg_tx.send(Message::Error(format!(
-                            "Failed to create collection: {}",
-                            e
-                        )));
+                },
+                Command::CreateCollection(name) => {
+                    match client.create_collection(&name).await {
+                        Ok(collection) => {
+                            debug!("Successfully created collection: {}", name);
+                            let _ = msg_tx.send(Message::CollectionCreated(collection));
+                        }
+                        Err(e) => {
+                            error!("Failed to create collection: {}", e);
+                            let _ = msg_tx.send(Message::Error(format!("Failed to create collection: {}", e)));
+                        }
                     }
                 },
                 Command::Shutdown => {

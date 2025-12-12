@@ -350,7 +350,10 @@ version = "1.0.0"
 
     let result = PluginManifest::from_str(toml);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), RuntimeError::InvalidManifest(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        RuntimeError::InvalidManifest(_)
+    ));
 }
 
 #[test]
@@ -466,7 +469,10 @@ fn test_validate_bytecode_wrong_version() {
 
     let result = BytecodeLoader::validate(&bytecode);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), RuntimeError::BytecodeError(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        RuntimeError::BytecodeError(_)
+    ));
 }
 
 #[test]
@@ -606,11 +612,7 @@ fn test_plugin_entry_point_detection() {
 #[test]
 fn test_plugin_default_entry_point() {
     let temp_dir = TempDir::new().unwrap();
-    let plugin_dir = create_test_plugin(
-        temp_dir.path(),
-        "test-plugin",
-        PluginConfig::default(),
-    );
+    let plugin_dir = create_test_plugin(temp_dir.path(), "test-plugin", PluginConfig::default());
 
     let plugin_path = discover_plugin(&plugin_dir).unwrap();
     assert_eq!(plugin_path.manifest.entry_point(), "plugin.fzb");

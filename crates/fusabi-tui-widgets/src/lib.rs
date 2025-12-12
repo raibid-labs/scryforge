@@ -36,7 +36,6 @@ use std::time::{Duration, Instant};
 pub mod theme;
 pub use theme::Theme;
 
-
 // ============================================================================
 // Provider Status
 // ============================================================================
@@ -162,7 +161,9 @@ impl<'a> StreamListWidget<'a> {
                 if unread > 0 {
                     line.push(Span::styled(
                         format!(" [{}]", unread),
-                        Style::default().fg(self.theme.unread).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(self.theme.unread)
+                            .add_modifier(Modifier::BOLD),
                     ));
                 }
 
@@ -458,7 +459,10 @@ impl<'a> StatusBarWidget<'a> {
         let mut spans = vec![];
 
         // Message
-        spans.push(Span::styled(self.message, Style::default().fg(self.theme.foreground)));
+        spans.push(Span::styled(
+            self.message,
+            Style::default().fg(self.theme.foreground),
+        ));
         spans.push(Span::raw(" | "));
 
         // Connection status
@@ -467,7 +471,10 @@ impl<'a> StatusBarWidget<'a> {
         } else {
             self.theme.error
         };
-        spans.push(Span::styled(self.connection_status, Style::default().fg(conn_color)));
+        spans.push(Span::styled(
+            self.connection_status,
+            Style::default().fg(conn_color),
+        ));
 
         // Provider statuses
         if !self.provider_statuses.is_empty() {
@@ -489,7 +496,9 @@ impl<'a> StatusBarWidget<'a> {
             spans.push(Span::raw(" | "));
             spans.push(Span::styled(
                 format!("{} unread", self.unread_count),
-                Style::default().fg(self.theme.unread).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(self.theme.unread)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
 
