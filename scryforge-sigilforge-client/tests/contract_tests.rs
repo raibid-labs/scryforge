@@ -2,6 +2,11 @@
 //!
 //! These tests verify the client's behavior with both real and mocked
 //! Sigilforge daemon responses.
+//!
+//! Note: These tests use Unix sockets and are only available on Unix platforms.
+
+// Unix sockets are not available on Windows
+#![cfg(unix)]
 
 use scryforge_sigilforge_client::{
     MockTokenFetcher, SigilforgeClient, SigilforgeError, TokenFetcher,
@@ -63,7 +68,7 @@ async fn handle_mock_connection(
     let response = match method {
         "get_token" => {
             let service = params
-                .get(0)
+                .first()
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
@@ -94,7 +99,7 @@ async fn handle_mock_connection(
             }
         }
         "resolve" => {
-            let reference = params.get(0).and_then(|v| v.as_str()).unwrap_or("");
+            let reference = params.first().and_then(|v| v.as_str()).unwrap_or("");
             json!({
                 "jsonrpc": "2.0",
                 "result": {

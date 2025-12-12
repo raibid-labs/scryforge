@@ -11,7 +11,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Main daemon configuration
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub struct Config {
     /// Daemon-specific configuration
     pub daemon: DaemonConfig,
@@ -59,16 +59,6 @@ pub struct ProviderConfig {
 
 fn default_settings() -> toml::Value {
     toml::Value::Table(toml::map::Map::new())
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            daemon: DaemonConfig::default(),
-            cache: CacheConfig::default(),
-            providers: HashMap::new(),
-        }
-    }
 }
 
 impl Default for DaemonConfig {
@@ -446,8 +436,10 @@ max_items_per_stream = 1000
         let mut config = Config::default();
         config.daemon.log_level = "debug".to_string();
 
-        let mut provider_config = ProviderConfig::default();
-        provider_config.sync_interval_minutes = 20;
+        let provider_config = ProviderConfig {
+            sync_interval_minutes: 20,
+            ..Default::default()
+        };
         config.providers.insert("test".to_string(), provider_config);
 
         let toml_str = toml::to_string(&config).unwrap();

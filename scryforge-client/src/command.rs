@@ -449,15 +449,11 @@ mod tests {
     fn test_parse_plugin_enable_disable() {
         assert_eq!(
             parse_command(":plugin enable my-plugin"),
-            Some(Command::Plugin(PluginCommand::Enable(
-                "my-plugin".to_string()
-            )))
+            Some(Command::Plugin(PluginCommand::Enable("my-plugin".to_string())))
         );
         assert_eq!(
             parse_command(":plugin disable my-plugin"),
-            Some(Command::Plugin(PluginCommand::Disable(
-                "my-plugin".to_string()
-            )))
+            Some(Command::Plugin(PluginCommand::Disable("my-plugin".to_string())))
         );
         assert_eq!(
             parse_command(":plugin on test"),
@@ -473,9 +469,7 @@ mod tests {
     fn test_parse_plugin_info_reload() {
         assert_eq!(
             parse_command(":plugin info my-plugin"),
-            Some(Command::Plugin(PluginCommand::Info(
-                "my-plugin".to_string()
-            )))
+            Some(Command::Plugin(PluginCommand::Info("my-plugin".to_string())))
         );
         assert_eq!(
             parse_command(":plugin reload"),

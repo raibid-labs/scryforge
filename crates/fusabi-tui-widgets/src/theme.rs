@@ -97,7 +97,7 @@ impl Theme {
         Self {
             background: Color::Rgb(40, 40, 40),
             foreground: Color::Rgb(235, 219, 178),
-            accent: Color::Rgb(184, 187, 38),  // Green
+            accent: Color::Rgb(184, 187, 38), // Green
             selection_bg: Color::Rgb(80, 73, 69),
             selection_fg: Color::Rgb(251, 241, 199),
             unread: Color::Rgb(250, 189, 47),  // Yellow
@@ -120,9 +120,9 @@ impl Theme {
             accent: Color::Rgb(136, 192, 208), // Frost cyan
             selection_bg: Color::Rgb(59, 66, 82),
             selection_fg: Color::Rgb(236, 239, 244),
-            unread: Color::Rgb(235, 203, 139), // Aurora yellow
-            saved: Color::Rgb(163, 190, 140),  // Aurora green
-            error: Color::Rgb(191, 97, 106),   // Aurora red
+            unread: Color::Rgb(235, 203, 139),  // Aurora yellow
+            saved: Color::Rgb(163, 190, 140),   // Aurora green
+            error: Color::Rgb(191, 97, 106),    // Aurora red
             success: Color::Rgb(163, 190, 140), // Aurora green
             border: Color::Rgb(76, 86, 106),
             border_focused: Color::Rgb(136, 192, 208),
@@ -137,16 +137,16 @@ impl Theme {
         Self {
             background: Color::Rgb(0, 43, 54),
             foreground: Color::Rgb(131, 148, 150),
-            accent: Color::Rgb(42, 161, 152),  // Cyan
+            accent: Color::Rgb(42, 161, 152), // Cyan
             selection_bg: Color::Rgb(7, 54, 66),
             selection_fg: Color::Rgb(147, 161, 161),
-            unread: Color::Rgb(181, 137, 0),   // Yellow
-            saved: Color::Rgb(108, 113, 196),  // Violet
-            error: Color::Rgb(220, 50, 47),    // Red
-            success: Color::Rgb(133, 153, 0),  // Green
+            unread: Color::Rgb(181, 137, 0),  // Yellow
+            saved: Color::Rgb(108, 113, 196), // Violet
+            error: Color::Rgb(220, 50, 47),   // Red
+            success: Color::Rgb(133, 153, 0), // Green
             border: Color::Rgb(88, 110, 117),
             border_focused: Color::Rgb(42, 161, 152),
-            header: Color::Rgb(38, 139, 210),  // Blue
+            header: Color::Rgb(38, 139, 210), // Blue
             muted: Color::Rgb(88, 110, 117),
             warning: Color::Rgb(181, 137, 0),
         }
@@ -314,8 +314,7 @@ fn parse_color(s: &str) -> Option<Color> {
     }
 
     // Hex color: #RRGGBB or RRGGBB
-    if s.starts_with('#') {
-        let hex = &s[1..];
+    if let Some(hex) = s.strip_prefix('#') {
         if hex.len() == 6 {
             if let (Ok(r), Ok(g), Ok(b)) = (
                 u8::from_str_radix(&hex[0..2], 16),
@@ -403,7 +402,10 @@ mod tests {
 
     #[test]
     fn test_parse_color_rgb() {
-        assert_eq!(parse_color("rgb(255, 87, 51)"), Some(Color::Rgb(255, 87, 51)));
+        assert_eq!(
+            parse_color("rgb(255, 87, 51)"),
+            Some(Color::Rgb(255, 87, 51))
+        );
         assert_eq!(parse_color("rgb(0, 0, 0)"), Some(Color::Rgb(0, 0, 0)));
     }
 
@@ -426,9 +428,21 @@ mod tests {
     #[test]
     fn test_theme_consistency() {
         // Ensure all themes can be created without panicking
-        let themes = ["dark", "light", "dracula", "gruvbox", "nord", "solarized-dark", "monokai"];
+        let themes = [
+            "dark",
+            "light",
+            "dracula",
+            "gruvbox",
+            "nord",
+            "solarized-dark",
+            "monokai",
+        ];
         for name in &themes {
-            assert!(Theme::by_name(name).is_some(), "Theme {} should exist", name);
+            assert!(
+                Theme::by_name(name).is_some(),
+                "Theme {} should exist",
+                name
+            );
         }
     }
 

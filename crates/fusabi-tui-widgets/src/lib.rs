@@ -36,7 +36,10 @@ use std::time::{Duration, Instant};
 pub mod theme;
 pub use theme::Theme;
 
-
+// ============================================================================
+// Time Utilities
+// ============================================================================
+pub mod time;
 // ============================================================================
 // Provider Status
 // ============================================================================
@@ -162,7 +165,9 @@ impl<'a> StreamListWidget<'a> {
                 if unread > 0 {
                     line.push(Span::styled(
                         format!(" [{}]", unread),
-                        Style::default().fg(self.theme.unread).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(self.theme.unread)
+                            .add_modifier(Modifier::BOLD),
                     ));
                 }
 
@@ -187,6 +192,26 @@ impl<'a> StreamListWidget<'a> {
 // ============================================================================
 // Item List Widget
 // ============================================================================
+
+/// Format view count in a compact, human-readable format.
+/// Examples: 1.2K, 45K, 1.5M, 3.2B
+fn format_view_count(count: u64) -> String {
+    if count < 1_000 {
+        format!("{} views", count)
+    } else if count < 1_000_000 {
+        let formatted = format!("{:.1}", count as f64 / 1_000.0);
+        let trimmed = formatted.trim_end_matches(".0");
+        format!("{}K views", trimmed)
+    } else if count < 1_000_000_000 {
+        let formatted = format!("{:.1}", count as f64 / 1_000_000.0);
+        let trimmed = formatted.trim_end_matches(".0");
+        format!("{}M views", trimmed)
+    } else {
+        let formatted = format!("{:.1}", count as f64 / 1_000_000_000.0);
+        let trimmed = formatted.trim_end_matches(".0");
+        format!("{}B views", trimmed)
+    }
+}
 
 /// Widget displaying a list of items.
 pub struct ItemListWidget<'a> {
@@ -227,21 +252,24 @@ impl<'a> ItemListWidget<'a> {
             .items
             .iter()
             .enumerate()
-            .map(|(i, item)| {
+            .flat_map(|(i, item)| {
                 let is_selected = self.selected == Some(i);
 
-                let mut spans = vec![];
+                let mut lines = vec![];
+
+                // First line: indicator + title + duration (for videos)
+                let mut title_spans = vec![];
 
                 // Read/unread indicator with distinct symbols
                 if !item.is_read {
-                    spans.push(Span::styled("● ", Style::default().fg(self.theme.unread)));
+                    title_spans.push(Span::styled("● ", Style::default().fg(self.theme.unread)));
                 } else {
-                    spans.push(Span::styled("○ ", Style::default().fg(self.theme.muted)));
+                    title_spans.push(Span::styled("○ ", Style::default().fg(self.theme.muted)));
                 }
 
                 // Saved/starred indicator
                 if item.is_saved {
-                    spans.push(Span::styled("★ ", Style::default().fg(self.theme.accent)));
+                    title_spans.push(Span::styled("★ ", Style::default().fg(self.theme.accent)));
                 }
 
                 // Title - bold if unread
@@ -250,17 +278,26 @@ impl<'a> ItemListWidget<'a> {
                 } else {
                     Style::default()
                 };
-                spans.push(Span::styled(&item.title, title_style));
+                title_spans.push(Span::styled(&item.title, title_style));
 
-                // Author if present
-                if let Some(ref author) = item.author {
-                    spans.push(Span::styled(
-                        format!(" - {}", author.name),
-                        Style::default().fg(self.theme.muted),
+                // Duration for video items (color-coded)
+                if let scryforge_provider_core::ItemContent::Video {
+                    duration_seconds: Some(duration),
+                    ..
+                } = &item.content
+                {
+                    let duration_str = crate::time::format_duration(*duration);
+                    let duration_color = crate::time::duration_color(*duration);
+                    title_spans.push(Span::raw("  "));
+                    title_spans.push(Span::styled(
+                        duration_str,
+                        Style::default()
+                            .fg(duration_color)
+                            .add_modifier(Modifier::BOLD),
                     ));
                 }
 
-                let style = if is_selected {
+                let title_style = if is_selected {
                     Style::default()
                         .bg(self.theme.selection_bg)
                         .fg(self.theme.selection_fg)
@@ -269,7 +306,61 @@ impl<'a> ItemListWidget<'a> {
                     Style::default()
                 };
 
-                ListItem::new(Line::from(spans)).style(style)
+                lines.push(ListItem::new(Line::from(title_spans)).style(title_style));
+
+                // Second line: metadata (author, views, published date)
+                let mut metadata_spans = vec![];
+                metadata_spans.push(Span::raw("  ")); // Indent for visual hierarchy
+
+                // Author/Channel name
+                if let Some(ref author) = item.author {
+                    metadata_spans.push(Span::styled(
+                        &author.name,
+                        Style::default().fg(self.theme.muted),
+                    ));
+                }
+
+                // View count for videos
+                if let scryforge_provider_core::ItemContent::Video {
+                    view_count: Some(views),
+                    ..
+                } = &item.content
+                {
+                    if !metadata_spans.is_empty() && metadata_spans.len() > 1 {
+                        metadata_spans
+                            .push(Span::styled(" · ", Style::default().fg(self.theme.muted)));
+                    }
+                    metadata_spans.push(Span::styled(
+                        format_view_count(*views),
+                        Style::default().fg(self.theme.muted),
+                    ));
+                }
+
+                // Published date (relative time)
+                if let Some(published) = item.published {
+                    if !metadata_spans.is_empty() && metadata_spans.len() > 1 {
+                        metadata_spans
+                            .push(Span::styled(" · ", Style::default().fg(self.theme.muted)));
+                    }
+                    metadata_spans.push(Span::styled(
+                        crate::time::format_relative_time(published),
+                        Style::default().fg(self.theme.muted),
+                    ));
+                }
+
+                let metadata_style = if is_selected {
+                    Style::default()
+                        .bg(self.theme.selection_bg)
+                        .fg(self.theme.muted)
+                } else {
+                    Style::default()
+                };
+
+                if metadata_spans.len() > 1 {
+                    lines.push(ListItem::new(Line::from(metadata_spans)).style(metadata_style));
+                }
+
+                lines
             })
             .collect();
 
@@ -458,7 +549,10 @@ impl<'a> StatusBarWidget<'a> {
         let mut spans = vec![];
 
         // Message
-        spans.push(Span::styled(self.message, Style::default().fg(self.theme.foreground)));
+        spans.push(Span::styled(
+            self.message,
+            Style::default().fg(self.theme.foreground),
+        ));
         spans.push(Span::raw(" | "));
 
         // Connection status
@@ -467,7 +561,10 @@ impl<'a> StatusBarWidget<'a> {
         } else {
             self.theme.error
         };
-        spans.push(Span::styled(self.connection_status, Style::default().fg(conn_color)));
+        spans.push(Span::styled(
+            self.connection_status,
+            Style::default().fg(conn_color),
+        ));
 
         // Provider statuses
         if !self.provider_statuses.is_empty() {
@@ -489,7 +586,9 @@ impl<'a> StatusBarWidget<'a> {
             spans.push(Span::raw(" | "));
             spans.push(Span::styled(
                 format!("{} unread", self.unread_count),
-                Style::default().fg(self.theme.unread).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(self.theme.unread)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
 
@@ -715,7 +814,7 @@ impl<'a> ToastWidget<'a> {
 
 pub mod prelude {
     pub use crate::{
-        ItemListWidget, OmnibarWidget, PreviewWidget, ProviderStatus, ProviderSyncStatus,
+        time, ItemListWidget, OmnibarWidget, PreviewWidget, ProviderStatus, ProviderSyncStatus,
         StatusBarWidget, StreamListWidget, Theme, Toast, ToastType, ToastWidget,
     };
 }

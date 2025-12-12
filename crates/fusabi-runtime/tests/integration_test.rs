@@ -176,7 +176,9 @@ fn test_discover_single_plugin() {
     assert_eq!(plugin_path.manifest.capabilities, vec!["network"]);
 }
 
+// This test uses XDG_DATA_HOME which is Linux-specific
 #[test]
+#[cfg(target_os = "linux")]
 fn test_discover_multiple_plugins() {
     let temp_dir = TempDir::new().unwrap();
 
@@ -268,7 +270,7 @@ name = "Minimal Plugin"
 version = "1.0.0"
 "#;
 
-    let manifest = PluginManifest::from_str(toml).unwrap();
+    let manifest = PluginManifest::parse(toml).unwrap();
     assert_eq!(manifest.plugin.id, "minimal");
     assert_eq!(manifest.plugin.name, "Minimal Plugin");
     assert_eq!(manifest.plugin.version, "1.0.0");
@@ -308,7 +310,7 @@ max_concurrent = 3
 retry_delay_ms = 1000
 "#;
 
-    let manifest = PluginManifest::from_str(toml).unwrap();
+    let manifest = PluginManifest::parse(toml).unwrap();
 
     assert_eq!(manifest.plugin.id, "full-plugin");
     assert_eq!(manifest.plugin.name, "Full Featured Plugin");
@@ -348,9 +350,12 @@ name = "Test"
 version = "1.0.0"
 "#;
 
-    let result = PluginManifest::from_str(toml);
+    let result = PluginManifest::parse(toml);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), RuntimeError::InvalidManifest(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        RuntimeError::InvalidManifest(_)
+    ));
 }
 
 #[test]
@@ -362,7 +367,7 @@ name = ""
 version = "1.0.0"
 "#;
 
-    let result = PluginManifest::from_str(toml);
+    let result = PluginManifest::parse(toml);
     assert!(result.is_err());
 }
 
@@ -375,7 +380,7 @@ name = "Test"
 version = ""
 "#;
 
-    let result = PluginManifest::from_str(toml);
+    let result = PluginManifest::parse(toml);
     assert!(result.is_err());
 }
 
@@ -392,7 +397,7 @@ plugin_type = "provider"
 id = "test-provider"
 "#;
 
-    let manifest = PluginManifest::from_str(provider_toml).unwrap();
+    let manifest = PluginManifest::parse(provider_toml).unwrap();
     assert!(manifest.is_provider());
 
     let action_toml = r#"
@@ -403,7 +408,7 @@ version = "1.0.0"
 plugin_type = "action"
 "#;
 
-    let manifest = PluginManifest::from_str(action_toml).unwrap();
+    let manifest = PluginManifest::parse(action_toml).unwrap();
     assert!(!manifest.is_provider());
 }
 
@@ -466,7 +471,10 @@ fn test_validate_bytecode_wrong_version() {
 
     let result = BytecodeLoader::validate(&bytecode);
     assert!(result.is_err());
-    assert!(matches!(result.unwrap_err(), RuntimeError::BytecodeError(_)));
+    assert!(matches!(
+        result.unwrap_err(),
+        RuntimeError::BytecodeError(_)
+    ));
 }
 
 #[test]
@@ -509,12 +517,12 @@ fn test_load_invalid_bytecode_file() {
 
 #[test]
 fn test_capability_from_str() {
-    assert_eq!(Capability::from_str("network"), Capability::Network);
-    assert_eq!(Capability::from_str("file_read"), Capability::FileRead);
-    assert_eq!(Capability::from_str("credentials"), Capability::Credentials);
-    assert_eq!(Capability::from_str("cache_read"), Capability::CacheRead);
+    assert_eq!(Capability::parse("network"), Capability::Network);
+    assert_eq!(Capability::parse("file_read"), Capability::FileRead);
+    assert_eq!(Capability::parse("credentials"), Capability::Credentials);
+    assert_eq!(Capability::parse("cache_read"), Capability::CacheRead);
     assert_eq!(
-        Capability::from_str("custom_cap"),
+        Capability::parse("custom_cap"),
         Capability::Custom("custom_cap".to_string())
     );
 }
@@ -568,7 +576,7 @@ name = "Test"
 version = "1.0.0"
 "#;
 
-    let manifest = PluginManifest::from_str(toml).unwrap();
+    let manifest = PluginManifest::parse(toml).unwrap();
     let caps = manifest.capability_set();
 
     assert_eq!(caps.len(), 3);
@@ -606,11 +614,7 @@ fn test_plugin_entry_point_detection() {
 #[test]
 fn test_plugin_default_entry_point() {
     let temp_dir = TempDir::new().unwrap();
-    let plugin_dir = create_test_plugin(
-        temp_dir.path(),
-        "test-plugin",
-        PluginConfig::default(),
-    );
+    let plugin_dir = create_test_plugin(temp_dir.path(), "test-plugin", PluginConfig::default());
 
     let plugin_path = discover_plugin(&plugin_dir).unwrap();
     assert_eq!(plugin_path.manifest.entry_point(), "plugin.fzb");
