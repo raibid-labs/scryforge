@@ -694,7 +694,10 @@ mod tests {
         let item_id = ItemId::new("dummy", "item-3");
 
         // Add item to collection
-        provider.add_to_collection(&collection_id, &item_id).await.unwrap();
+        provider
+            .add_to_collection(&collection_id, &item_id)
+            .await
+            .unwrap();
 
         // Verify item was added
         let items = provider.get_collection_items(&collection_id).await.unwrap();
@@ -719,7 +722,10 @@ mod tests {
         let item_id = ItemId::new("dummy", "item-1");
 
         // Remove item from collection
-        provider.remove_from_collection(&collection_id, &item_id).await.unwrap();
+        provider
+            .remove_from_collection(&collection_id, &item_id)
+            .await
+            .unwrap();
 
         // Verify item was removed
         let items = provider.get_collection_items(&collection_id).await.unwrap();
@@ -733,7 +739,9 @@ mod tests {
         let item_id = ItemId::new("dummy", "nonexistent");
 
         // Try to remove item that's not in collection
-        let result = provider.remove_from_collection(&collection_id, &item_id).await;
+        let result = provider
+            .remove_from_collection(&collection_id, &item_id)
+            .await;
         assert!(result.is_err());
     }
 
@@ -759,24 +767,39 @@ mod tests {
 
         // Initially empty
         let collections = provider.list_collections().await.unwrap();
-        let reading_list = collections.iter().find(|c| c.id.0 == "dummy:reading-list").unwrap();
+        let reading_list = collections
+            .iter()
+            .find(|c| c.id.0 == "dummy:reading-list")
+            .unwrap();
         assert_eq!(reading_list.item_count, 0);
 
         // Add an item
         let item_id = ItemId::new("dummy", "item-1");
-        provider.add_to_collection(&collection_id, &item_id).await.unwrap();
+        provider
+            .add_to_collection(&collection_id, &item_id)
+            .await
+            .unwrap();
 
         // Check count updated
         let collections = provider.list_collections().await.unwrap();
-        let reading_list = collections.iter().find(|c| c.id.0 == "dummy:reading-list").unwrap();
+        let reading_list = collections
+            .iter()
+            .find(|c| c.id.0 == "dummy:reading-list")
+            .unwrap();
         assert_eq!(reading_list.item_count, 1);
 
         // Remove the item
-        provider.remove_from_collection(&collection_id, &item_id).await.unwrap();
+        provider
+            .remove_from_collection(&collection_id, &item_id)
+            .await
+            .unwrap();
 
         // Check count updated
         let collections = provider.list_collections().await.unwrap();
-        let reading_list = collections.iter().find(|c| c.id.0 == "dummy:reading-list").unwrap();
+        let reading_list = collections
+            .iter()
+            .find(|c| c.id.0 == "dummy:reading-list")
+            .unwrap();
         assert_eq!(reading_list.item_count, 0);
     }
 }

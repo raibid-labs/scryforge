@@ -284,17 +284,11 @@ mod tests {
                 compiled_at: None,
                 compiler_version: None,
             },
-            constants: vec![
-                Constant::String("Hello".to_string()),
-                Constant::Int(42),
-            ],
+            constants: vec![Constant::String("Hello".to_string()), Constant::Int(42)],
             functions: vec![Function {
                 name: "main".to_string(),
                 params: vec![],
-                instructions: vec![
-                    Instruction::LoadConst { index: 0 },
-                    Instruction::Return,
-                ],
+                instructions: vec![Instruction::LoadConst { index: 0 }, Instruction::Return],
                 local_count: 0,
             }],
             entry_point: "main".to_string(),

@@ -85,11 +85,7 @@ async fn main() -> Result<()> {
     for plugin in &plugins {
         info!(
             "Plugin: {} v{} ({:?}) - provider: {}, bytecode: {}",
-            plugin.name,
-            plugin.version,
-            plugin.status,
-            plugin.is_provider,
-            plugin.has_bytecode
+            plugin.name, plugin.version, plugin.status, plugin.is_provider, plugin.has_bytecode
         );
     }
 

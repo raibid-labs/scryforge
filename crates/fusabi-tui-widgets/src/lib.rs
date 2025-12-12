@@ -166,7 +166,9 @@ impl<'a> StreamListWidget<'a> {
                 if unread > 0 {
                     line.push(Span::styled(
                         format!(" [{}]", unread),
-                        Style::default().fg(self.theme.unread).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(self.theme.unread)
+                            .add_modifier(Modifier::BOLD),
                     ));
                 }
 
@@ -265,7 +267,10 @@ impl<'a> ItemListWidget<'a> {
                 }
 
                 // Duration for video items with color coding
-                if let scryforge_provider_core::ItemContent::Video { duration_seconds, .. } = &item.content {
+                if let scryforge_provider_core::ItemContent::Video {
+                    duration_seconds, ..
+                } = &item.content
+                {
                     if let Some(seconds) = duration_seconds {
                         use crate::time::duration_color;
                         let hours = seconds / 3600;
@@ -479,7 +484,10 @@ impl<'a> StatusBarWidget<'a> {
         let mut spans = vec![];
 
         // Message
-        spans.push(Span::styled(self.message, Style::default().fg(self.theme.foreground)));
+        spans.push(Span::styled(
+            self.message,
+            Style::default().fg(self.theme.foreground),
+        ));
         spans.push(Span::raw(" | "));
 
         // Connection status
@@ -488,7 +496,10 @@ impl<'a> StatusBarWidget<'a> {
         } else {
             self.theme.error
         };
-        spans.push(Span::styled(self.connection_status, Style::default().fg(conn_color)));
+        spans.push(Span::styled(
+            self.connection_status,
+            Style::default().fg(conn_color),
+        ));
 
         // Provider statuses
         if !self.provider_statuses.is_empty() {
@@ -510,7 +521,9 @@ impl<'a> StatusBarWidget<'a> {
             spans.push(Span::raw(" | "));
             spans.push(Span::styled(
                 format!("{} unread", self.unread_count),
-                Style::default().fg(self.theme.unread).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(self.theme.unread)
+                    .add_modifier(Modifier::BOLD),
             ));
         }
 
@@ -736,8 +749,7 @@ impl<'a> ToastWidget<'a> {
 
 pub mod prelude {
     pub use crate::{
-        ItemListWidget, OmnibarWidget, PreviewWidget, ProviderStatus, ProviderSyncStatus,
+        time, ItemListWidget, OmnibarWidget, PreviewWidget, ProviderStatus, ProviderSyncStatus,
         StatusBarWidget, StreamListWidget, Theme, Toast, ToastType, ToastWidget,
-        time,
     };
 }
