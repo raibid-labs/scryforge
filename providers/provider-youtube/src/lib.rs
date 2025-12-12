@@ -1877,6 +1877,7 @@ mod tests {
             panic!("Expected data in result");
         }
     }
+
     #[tokio::test]
     async fn test_like_action() {
         let provider = create_test_provider();
@@ -1885,6 +1886,24 @@ mod tests {
         assert!(actions.iter().any(|a| a.id == "like"));
         assert!(actions.iter().any(|a| a.id == "unlike"));
         assert!(actions.iter().any(|a| a.id == "subscribe"));
+    }
+
+    #[test]
+    fn test_find_download_tool() {
+        // This test just validates the function runs without panic
+        // Actual result depends on system configuration
+        let _result = YouTubeProvider::find_download_tool();
+    }
+
+    #[test]
+    fn test_generate_download_command() {
+        assert_eq!(
+            YouTubeProvider::generate_download_command(
+                "yt-dlp",
+                "https://youtube.com/watch?v=abc123"
+            ),
+            "yt-dlp \"https://youtube.com/watch?v=abc123\""
+        );
     }
 
     fn create_test_video_item() -> Item {
@@ -1914,4 +1933,11 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_download_action_available() {
+        let provider = create_test_provider();
+        let item = create_test_video_item();
+        let actions = provider.available_actions(&item).await.unwrap();
+        assert!(actions.iter().any(|a| a.id == "download"));
+    }
 }
