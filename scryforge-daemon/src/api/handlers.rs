@@ -134,12 +134,18 @@ pub struct ApiImpl<C: Cache + 'static> {
     cache: Option<Arc<C>>,
 }
 
-impl<C: Cache + 'static> ApiImpl<C> {
-    pub fn new() -> Self {
+impl<C: Cache + 'static> Default for ApiImpl<C> {
+    fn default() -> Self {
         Self {
             sync_manager: None,
             cache: None,
         }
+    }
+}
+
+impl<C: Cache + 'static> ApiImpl<C> {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn with_sync_manager(sync_manager: Arc<RwLock<SyncManager<C>>>) -> Self {
@@ -939,7 +945,7 @@ mod tests {
 
         // Create and insert a test item
         let item = create_test_item("test:item:1");
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         // Verify item is not saved initially
         let items = cache.get_items(&item.stream_id, None)?;
@@ -980,7 +986,7 @@ mod tests {
         // Create and insert a test item that's already saved
         let mut item = create_test_item("test:item:1");
         item.is_saved = true;
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         // Verify item is saved initially
         let items = cache.get_items(&item.stream_id, None)?;
@@ -1038,7 +1044,7 @@ mod tests {
 
         // Create and insert a test item
         let item = create_test_item("test:item:1");
-        cache.upsert_items(&[item.clone()])?;
+        cache.upsert_items(std::slice::from_ref(&item))?;
 
         // Save
         ScryforgeApiServer::save_item(&api, "test:item:1".to_string()).await?;

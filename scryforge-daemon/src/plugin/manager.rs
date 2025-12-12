@@ -1,10 +1,9 @@
 //! Plugin manager for loading and managing Fusabi plugins.
 
 use crate::registry::ProviderRegistry;
-use fusabi_plugin_api::{PluginInstance, PluginProvider, PluginRegistry as FusabiPluginRegistry};
-use fusabi_runtime::{discover_plugins, RuntimeResult};
-use std::sync::Arc;
-use tracing::{info, warn};
+use fusabi_plugin_api::PluginRegistry as FusabiPluginRegistry;
+use fusabi_runtime::RuntimeResult;
+use tracing::info;
 
 /// Status of a plugin.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,12 +45,12 @@ impl PluginManager {
     ///
     /// This method should be called after plugins are loaded to make
     /// plugin-based providers available through the standard provider registry.
-    pub fn register_providers(&self, registry: &mut ProviderRegistry) {
+    pub fn register_providers(&self, _registry: &mut ProviderRegistry) {
         let provider_ids = self.plugin_registry.provider_ids();
         info!("Registering {} plugin providers", provider_ids.len());
 
         for id in &provider_ids {
-            if let Some(provider) = self.plugin_registry.get_provider(id) {
+            if let Some(_provider) = self.plugin_registry.get_provider(id) {
                 // We need to clone the provider or create a wrapper
                 // For now, log that we would register it
                 info!("Would register plugin provider: {}", id);

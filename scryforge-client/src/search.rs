@@ -25,7 +25,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// The TUI parser extracts basic filters and passes the entire query string
 /// to the daemon, which performs advanced FTS5 parsing.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SearchQuery {
     /// The full query string (passed to daemon as-is for FTS5 parsing)
     pub text: String,
@@ -87,6 +87,20 @@ impl StatusFilter {
             "unread" => Some(Self::Unread),
             "saved" | "starred" | "favorite" => Some(Self::Saved),
             _ => None,
+        }
+    }
+}
+
+impl Default for SearchQuery {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+            stream_filter: None,
+            provider_filter: None,
+            type_filter: None,
+            status_filters: Vec::new(),
+            date_filter: None,
+            has_advanced_syntax: false,
         }
     }
 }

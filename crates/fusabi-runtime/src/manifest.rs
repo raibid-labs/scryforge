@@ -146,11 +146,11 @@ impl PluginManifest {
     /// Load a manifest from a TOML file.
     pub fn from_file(path: &Path) -> RuntimeResult<Self> {
         let content = std::fs::read_to_string(path)?;
-        Self::from_str(&content)
+        Self::parse(&content)
     }
 
     /// Parse a manifest from a TOML string.
-    pub fn from_str(content: &str) -> RuntimeResult<Self> {
+    pub fn parse(content: &str) -> RuntimeResult<Self> {
         let manifest: PluginManifest = toml::from_str(content)?;
         manifest.validate()?;
         Ok(manifest)
@@ -221,7 +221,7 @@ requests_per_second = 10.0
 max_concurrent = 5
 "#;
 
-        let manifest = PluginManifest::from_str(toml).unwrap();
+        let manifest = PluginManifest::parse(toml).unwrap();
         assert_eq!(manifest.plugin.id, "test-provider");
         assert_eq!(manifest.plugin.name, "Test Provider");
         assert!(manifest.is_provider());
@@ -244,7 +244,7 @@ name = "Test"
 version = "0.1.0"
 "#;
 
-        let result = PluginManifest::from_str(toml);
+        let result = PluginManifest::parse(toml);
         assert!(result.is_err());
     }
 }

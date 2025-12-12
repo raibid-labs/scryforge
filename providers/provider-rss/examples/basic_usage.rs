@@ -76,15 +76,17 @@ async fn main() -> Result<()> {
                             if let Some(url) = &item.url {
                                 println!("     URL: {}", url);
                             }
-                            if let ItemContent::Article { summary, .. } = &item.content {
-                                if let Some(summary_text) = summary {
-                                    let truncated = if summary_text.len() > 100 {
-                                        format!("{}...", &summary_text[..100])
-                                    } else {
-                                        summary_text.clone()
-                                    };
-                                    println!("     Summary: {}", truncated);
-                                }
+                            if let ItemContent::Article {
+                                summary: Some(summary_text),
+                                ..
+                            } = &item.content
+                            {
+                                let truncated = if summary_text.len() > 100 {
+                                    format!("{}...", &summary_text[..100])
+                                } else {
+                                    summary_text.clone()
+                                };
+                                println!("     Summary: {}", truncated);
                             }
                             println!();
                         }

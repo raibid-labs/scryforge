@@ -2,6 +2,8 @@
 //!
 //! This module provides reusable mock data and helper functions for testing.
 
+#![allow(dead_code)]
+
 use chrono::Utc;
 use scryforge_provider_core::{
     Author, Collection, CollectionId, Item, ItemContent, ItemId, Stream, StreamId, StreamType,

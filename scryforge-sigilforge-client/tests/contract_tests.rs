@@ -63,7 +63,7 @@ async fn handle_mock_connection(
     let response = match method {
         "get_token" => {
             let service = params
-                .get(0)
+                .first()
                 .and_then(|v| v.as_str())
                 .unwrap_or("")
                 .to_string();
@@ -94,7 +94,7 @@ async fn handle_mock_connection(
             }
         }
         "resolve" => {
-            let reference = params.get(0).and_then(|v| v.as_str()).unwrap_or("");
+            let reference = params.first().and_then(|v| v.as_str()).unwrap_or("");
             json!({
                 "jsonrpc": "2.0",
                 "result": {

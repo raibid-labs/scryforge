@@ -49,7 +49,7 @@ pub enum Capability {
 
 impl Capability {
     /// Parse a capability from a string.
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse(s: &str) -> Self {
         match s {
             "network" => Capability::Network,
             "file_read" => Capability::FileRead,
@@ -107,7 +107,7 @@ impl CapabilitySet {
     {
         let capabilities = strings
             .into_iter()
-            .map(|s| Capability::from_str(s.as_ref()))
+            .map(|s| Capability::parse(s.as_ref()))
             .collect();
         Self { capabilities }
     }
