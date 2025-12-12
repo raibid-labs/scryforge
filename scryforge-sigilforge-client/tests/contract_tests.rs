@@ -2,6 +2,11 @@
 //!
 //! These tests verify the client's behavior with both real and mocked
 //! Sigilforge daemon responses.
+//!
+//! Note: These tests use Unix sockets and are only available on Unix platforms.
+
+// Unix sockets are not available on Windows
+#![cfg(unix)]
 
 use scryforge_sigilforge_client::{
     MockTokenFetcher, SigilforgeClient, SigilforgeError, TokenFetcher,
