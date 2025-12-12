@@ -282,20 +282,19 @@ impl<'a> ItemListWidget<'a> {
 
                 // Duration for video items (color-coded)
                 if let scryforge_provider_core::ItemContent::Video {
-                    duration_seconds, ..
+                    duration_seconds: Some(duration),
+                    ..
                 } = &item.content
                 {
-                    if let Some(duration) = duration_seconds {
-                        let duration_str = crate::time::format_duration(*duration);
-                        let duration_color = crate::time::duration_color(*duration);
-                        title_spans.push(Span::raw("  "));
-                        title_spans.push(Span::styled(
-                            duration_str,
-                            Style::default()
-                                .fg(duration_color)
-                                .add_modifier(Modifier::BOLD),
-                        ));
-                    }
+                    let duration_str = crate::time::format_duration(*duration);
+                    let duration_color = crate::time::duration_color(*duration);
+                    title_spans.push(Span::raw("  "));
+                    title_spans.push(Span::styled(
+                        duration_str,
+                        Style::default()
+                            .fg(duration_color)
+                            .add_modifier(Modifier::BOLD),
+                    ));
                 }
 
                 let title_style = if is_selected {
@@ -322,19 +321,19 @@ impl<'a> ItemListWidget<'a> {
                 }
 
                 // View count for videos
-                if let scryforge_provider_core::ItemContent::Video { view_count, .. } =
-                    &item.content
+                if let scryforge_provider_core::ItemContent::Video {
+                    view_count: Some(views),
+                    ..
+                } = &item.content
                 {
-                    if let Some(views) = view_count {
-                        if !metadata_spans.is_empty() && metadata_spans.len() > 1 {
-                            metadata_spans
-                                .push(Span::styled(" · ", Style::default().fg(self.theme.muted)));
-                        }
-                        metadata_spans.push(Span::styled(
-                            format_view_count(*views),
-                            Style::default().fg(self.theme.muted),
-                        ));
+                    if !metadata_spans.is_empty() && metadata_spans.len() > 1 {
+                        metadata_spans
+                            .push(Span::styled(" · ", Style::default().fg(self.theme.muted)));
                     }
+                    metadata_spans.push(Span::styled(
+                        format_view_count(*views),
+                        Style::default().fg(self.theme.muted),
+                    ));
                 }
 
                 // Published date (relative time)
