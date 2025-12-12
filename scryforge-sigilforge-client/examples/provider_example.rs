@@ -3,22 +3,25 @@
 //! This example shows how a provider can use the TokenFetcher trait to
 //! request authentication tokens from the Sigilforge daemon.
 //!
-//! Note: This example is Unix-only because SigilforgeClient uses Unix sockets.
+//! Note: This example only runs on Unix platforms because SigilforgeClient
+//! uses Unix domain sockets for IPC.
 
-// This example requires Unix sockets
-#![cfg(unix)]
-
+#[cfg(unix)]
 use scryforge_sigilforge_client::{MockTokenFetcher, SigilforgeClient, TokenFetcher};
+#[cfg(unix)]
 use std::collections::HashMap;
+#[cfg(unix)]
 use std::sync::Arc;
 
 /// Example provider that requires OAuth authentication.
+#[cfg(unix)]
 struct SpotifyProvider {
     service_name: &'static str,
     account_name: String,
     token_fetcher: Arc<dyn TokenFetcher>,
 }
 
+#[cfg(unix)]
 impl SpotifyProvider {
     /// Create a new provider with the given token fetcher.
     pub fn new(account_name: String, token_fetcher: Arc<dyn TokenFetcher>) -> Self {
@@ -60,6 +63,7 @@ impl SpotifyProvider {
     }
 }
 
+#[cfg(unix)]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Sigilforge Client Provider Example ===\n");
@@ -137,4 +141,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("\n=== Example Complete ===");
 
     Ok(())
+}
+
+#[cfg(not(unix))]
+fn main() {
+    println!("This example only runs on Unix platforms.");
+    println!("SigilforgeClient uses Unix domain sockets which are not available on Windows.");
 }
