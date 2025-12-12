@@ -317,6 +317,110 @@ impl YouTubeProvider {
         Some(total_seconds)
     }
 
+    /// Parse user timestamp input to seconds.
+    /// Accepts formats: "1:23:45", "5:30", "45", "1h30m", "5m30s"
+    fn parse_user_timestamp(input: &str) -> Option<u32> {
+        let input = input.trim();
+
+        // Try colon format first: "1:23:45" or "5:30" or "45"
+        if input.contains(':') {
+            let parts: Vec<&str> = input.split(':').collect();
+            return match parts.len() {
+                // H:M:S
+                3 => {
+                    let hours: u32 = parts[0].parse().ok()?;
+                    let minutes: u32 = parts[1].parse().ok()?;
+                    let seconds: u32 = parts[2].parse().ok()?;
+                    Some(hours * 3600 + minutes * 60 + seconds)
+                }
+                // M:S
+                2 => {
+                    let minutes: u32 = parts[0].parse().ok()?;
+                    let seconds: u32 = parts[1].parse().ok()?;
+                    Some(minutes * 60 + seconds)
+                }
+                _ => None,
+            };
+        }
+
+        // Try plain seconds: "45"
+        if let Ok(seconds) = input.parse::<u32>() {
+            return Some(seconds);
+        }
+
+        // Try h/m/s format: "1h30m15s" or "5m" or "30s"
+        let mut total = 0u32;
+        let mut current_num = String::new();
+
+        for ch in input.chars() {
+            if ch.is_ascii_digit() {
+                current_num.push(ch);
+            } else {
+                if let Ok(num) = current_num.parse::<u32>() {
+                    match ch.to_ascii_lowercase() {
+                        'h' => total += num * 3600,
+                        'm' => total += num * 60,
+                        's' => total += num,
+                        _ => return None,
+                    }
+                }
+                current_num.clear();
+            }
+        }
+
+        if total > 0 {
+            Some(total)
+        } else {
+            None
+        }
+    }
+
+    /// Extract video ID from a YouTube URL or item.
+    fn extract_video_id(item: &Item) -> Option<String> {
+        // Try extracting from URL first (more reliable)
+        if let Some(url) = &item.url {
+            // Handle standard format: https://www.youtube.com/watch?v=VIDEO_ID
+            if let Some(start) = url.find("watch?v=") {
+                let video_id = &url[start + 8..];
+                if let Some(end) = video_id.find('&') {
+                    return Some(video_id[..end].to_string());
+                } else {
+                    return Some(video_id.to_string());
+                }
+            }
+
+            // Handle short format: https://youtu.be/VIDEO_ID
+            if let Some(start) = url.find("youtu.be/") {
+                let video_id = &url[start + 9..];
+                if let Some(end) = video_id.find('?') {
+                    return Some(video_id[..end].to_string());
+                } else {
+                    return Some(video_id.to_string());
+                }
+            }
+        }
+
+        // Fall back to extracting from item ID (format: "youtube:VIDEO_ID")
+        if let Some(video_id) = item.id.0.strip_prefix("youtube:") {
+            return Some(video_id.to_string());
+        }
+
+        None
+    }
+
+    /// Generate a short URL (youtu.be format) from a video ID.
+    fn make_short_url(video_id: &str) -> String {
+        format!("https://youtu.be/{}", video_id)
+    }
+
+    /// Check if yt-dlp is available on the system.
+    fn is_yt_dlp_available() -> bool {
+        std::process::Command::new("yt-dlp")
+            .arg("--version")
+            .output()
+            .is_ok()
+    }
+
     /// Parse RFC 3339 timestamp to DateTime<Utc>.
     fn parse_timestamp(timestamp: &str) -> Option<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(timestamp)
@@ -505,15 +609,22 @@ impl Provider for YouTubeProvider {
                 id: "copy_short_link".to_string(),
                 name: "Copy Short Link".to_string(),
                 description: "Copy youtu.be short URL".to_string(),
-                kind: ActionKind::CopyLink,
+                kind: ActionKind::Custom("copy_short_link".to_string()),
                 keyboard_shortcut: Some("y".to_string()),
             },
             Action {
                 id: "open_at_time".to_string(),
                 name: "Open at Timestamp".to_string(),
                 description: "Open video at a specific time (format: 1:23:45 or 5:30)".to_string(),
-                kind: ActionKind::OpenInBrowser,
+                kind: ActionKind::Custom("open_at_time".to_string()),
                 keyboard_shortcut: Some("t".to_string()),
+            },
+            Action {
+                id: "download".to_string(),
+                name: "Download Video".to_string(),
+                description: "Download video with yt-dlp".to_string(),
+                kind: ActionKind::Custom("download".to_string()),
+                keyboard_shortcut: Some("D".to_string()),
             },
             Action {
                 id: "save".to_string(),
@@ -526,7 +637,7 @@ impl Provider for YouTubeProvider {
     }
 
     async fn execute_action(&self, item: &Item, action: &Action) -> Result<ActionResult> {
-        match action.kind {
+        match &action.kind {
             ActionKind::OpenInBrowser => {
                 if let Some(url) = &item.url {
                     Ok(ActionResult {
@@ -557,6 +668,88 @@ impl Provider for YouTubeProvider {
                     })
                 }
             }
+            ActionKind::Custom(custom_action) => match custom_action.as_str() {
+                "copy_short_link" => {
+                    if let Some(video_id) = Self::extract_video_id(item) {
+                        let short_url = Self::make_short_url(&video_id);
+                        Ok(ActionResult {
+                            success: true,
+                            message: Some("Short link copied to clipboard".to_string()),
+                            data: Some(serde_json::json!({
+                                "url": short_url,
+                                "format": "short"
+                            })),
+                        })
+                    } else {
+                        Ok(ActionResult {
+                            success: false,
+                            message: Some("Could not extract video ID".to_string()),
+                            data: None,
+                        })
+                    }
+                }
+                "open_at_time" => {
+                    // This action requires user input for the timestamp
+                    // The client should prompt for input and provide it in the data field
+                    // For now, we'll return a result indicating input is needed
+                    if let Some(video_id) = Self::extract_video_id(item) {
+                        Ok(ActionResult {
+                            success: true,
+                            message: Some(
+                                "Enter timestamp (e.g., 1:23:45, 5:30, or 45):".to_string(),
+                            ),
+                            data: Some(serde_json::json!({
+                                "video_id": video_id,
+                                "requires_input": true,
+                                "input_type": "timestamp"
+                            })),
+                        })
+                    } else {
+                        Ok(ActionResult {
+                            success: false,
+                            message: Some("Could not extract video ID".to_string()),
+                            data: None,
+                        })
+                    }
+                }
+                "download" => {
+                    if !Self::is_yt_dlp_available() {
+                        return Ok(ActionResult {
+                            success: false,
+                            message: Some(
+                                "yt-dlp is not installed. Install it with: pip install yt-dlp"
+                                    .to_string(),
+                            ),
+                            data: None,
+                        });
+                    }
+
+                    if let Some(url) = &item.url {
+                        // Spawn yt-dlp in the background
+                        // The client should handle the actual execution
+                        Ok(ActionResult {
+                            success: true,
+                            message: Some("Starting download with yt-dlp...".to_string()),
+                            data: Some(serde_json::json!({
+                                "command": "yt-dlp",
+                                "args": [url],
+                                "url": url
+                            })),
+                        })
+                    } else {
+                        Ok(ActionResult {
+                            success: false,
+                            message: Some("No URL available".to_string()),
+                            data: None,
+                        })
+                    }
+                }
+                _ => Ok(ActionResult {
+                    success: false,
+                    message: Some(format!("Unknown custom action: {}", custom_action)),
+                    data: None,
+                }),
+            },
             _ => Ok(ActionResult {
                 success: true,
                 message: Some(format!("Executed action: {}", action.name)),
@@ -1168,10 +1361,19 @@ mod tests {
         };
 
         let actions = provider.available_actions(&item).await.unwrap();
-        assert_eq!(actions.len(), 3);
+        assert_eq!(actions.len(), 6);
         assert_eq!(actions[0].kind, ActionKind::OpenInBrowser);
         assert_eq!(actions[1].kind, ActionKind::CopyLink);
-        assert_eq!(actions[2].kind, ActionKind::Save);
+        assert_eq!(
+            actions[2].kind,
+            ActionKind::Custom("copy_short_link".to_string())
+        );
+        assert_eq!(
+            actions[3].kind,
+            ActionKind::Custom("open_at_time".to_string())
+        );
+        assert_eq!(actions[4].kind, ActionKind::Custom("download".to_string()));
+        assert_eq!(actions[5].kind, ActionKind::Save);
     }
 
     #[tokio::test]
@@ -1257,6 +1459,10 @@ mod tests {
             }
             _ => panic!("Expected Video content"),
         }
+
+        // Verify like_count and comment_count are in metadata
+        assert_eq!(item.metadata.get("like_count"), Some(&"50".to_string()));
+        assert_eq!(item.metadata.get("comment_count"), Some(&"10".to_string()));
     }
 
     #[tokio::test]
@@ -1265,5 +1471,237 @@ mod tests {
         // Mock fetcher will return a test token
         let health = provider.health_check().await.unwrap();
         assert!(health.is_healthy);
+    }
+
+    #[test]
+    fn test_parse_user_timestamp() {
+        // Colon format: H:M:S
+        assert_eq!(YouTubeProvider::parse_user_timestamp("1:23:45"), Some(5025));
+        assert_eq!(YouTubeProvider::parse_user_timestamp("0:05:30"), Some(330));
+
+        // Colon format: M:S
+        assert_eq!(YouTubeProvider::parse_user_timestamp("5:30"), Some(330));
+        assert_eq!(YouTubeProvider::parse_user_timestamp("0:45"), Some(45));
+
+        // Plain seconds
+        assert_eq!(YouTubeProvider::parse_user_timestamp("45"), Some(45));
+        assert_eq!(YouTubeProvider::parse_user_timestamp("120"), Some(120));
+
+        // h/m/s format
+        assert_eq!(
+            YouTubeProvider::parse_user_timestamp("1h30m15s"),
+            Some(5415)
+        );
+        assert_eq!(YouTubeProvider::parse_user_timestamp("5m"), Some(300));
+        assert_eq!(YouTubeProvider::parse_user_timestamp("45s"), Some(45));
+        assert_eq!(YouTubeProvider::parse_user_timestamp("2h"), Some(7200));
+        assert_eq!(YouTubeProvider::parse_user_timestamp("1h5m"), Some(3900));
+
+        // Whitespace handling
+        assert_eq!(YouTubeProvider::parse_user_timestamp("  5:30  "), Some(330));
+
+        // Invalid inputs
+        assert_eq!(YouTubeProvider::parse_user_timestamp("invalid"), None);
+        assert_eq!(YouTubeProvider::parse_user_timestamp(""), None);
+        assert_eq!(YouTubeProvider::parse_user_timestamp("1:2:3:4"), None);
+    }
+
+    #[test]
+    fn test_extract_video_id() {
+        // From item ID
+        let item = Item {
+            id: ItemId::new("youtube", "dQw4w9WgXcQ"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test".to_string(),
+            content: ItemContent::Video {
+                description: "".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: None,
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+        assert_eq!(
+            YouTubeProvider::extract_video_id(&item),
+            Some("dQw4w9WgXcQ".to_string())
+        );
+
+        // From standard URL
+        let item = Item {
+            id: ItemId::new("youtube", "test"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test".to_string(),
+            content: ItemContent::Video {
+                description: "".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+        assert_eq!(
+            YouTubeProvider::extract_video_id(&item),
+            Some("dQw4w9WgXcQ".to_string())
+        );
+
+        // From standard URL with query params
+        let item = Item {
+            id: ItemId::new("youtube", "test"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test".to_string(),
+            content: ItemContent::Video {
+                description: "".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+        assert_eq!(
+            YouTubeProvider::extract_video_id(&item),
+            Some("dQw4w9WgXcQ".to_string())
+        );
+
+        // From short URL
+        let item = Item {
+            id: ItemId::new("youtube", "test"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test".to_string(),
+            content: ItemContent::Video {
+                description: "".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://youtu.be/dQw4w9WgXcQ".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+        assert_eq!(
+            YouTubeProvider::extract_video_id(&item),
+            Some("dQw4w9WgXcQ".to_string())
+        );
+    }
+
+    #[test]
+    fn test_make_short_url() {
+        assert_eq!(
+            YouTubeProvider::make_short_url("dQw4w9WgXcQ"),
+            "https://youtu.be/dQw4w9WgXcQ"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_action_copy_short_link() {
+        let provider = create_test_provider();
+        let item = Item {
+            id: ItemId::new("youtube", "dQw4w9WgXcQ"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test Video".to_string(),
+            content: ItemContent::Video {
+                description: "Test".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+
+        let action = Action {
+            id: "copy_short_link".to_string(),
+            name: "Copy Short Link".to_string(),
+            description: "Copy short link".to_string(),
+            kind: ActionKind::Custom("copy_short_link".to_string()),
+            keyboard_shortcut: None,
+        };
+
+        let result = provider.execute_action(&item, &action).await.unwrap();
+        assert!(result.success);
+        assert!(result.message.is_some());
+
+        // Check that the URL in data is the short format
+        if let Some(data) = result.data {
+            assert_eq!(data["url"], "https://youtu.be/dQw4w9WgXcQ");
+            assert_eq!(data["format"], "short");
+        } else {
+            panic!("Expected data in result");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_execute_action_open_at_time() {
+        let provider = create_test_provider();
+        let item = Item {
+            id: ItemId::new("youtube", "dQw4w9WgXcQ"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test Video".to_string(),
+            content: ItemContent::Video {
+                description: "Test".to_string(),
+                duration_seconds: None,
+                view_count: None,
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=dQw4w9WgXcQ".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        };
+
+        let action = Action {
+            id: "open_at_time".to_string(),
+            name: "Open at Timestamp".to_string(),
+            description: "Open at timestamp".to_string(),
+            kind: ActionKind::Custom("open_at_time".to_string()),
+            keyboard_shortcut: None,
+        };
+
+        let result = provider.execute_action(&item, &action).await.unwrap();
+        assert!(result.success);
+
+        // Should indicate that input is required
+        if let Some(data) = result.data {
+            assert_eq!(data["video_id"], "dQw4w9WgXcQ");
+            assert_eq!(data["requires_input"], true);
+            assert_eq!(data["input_type"], "timestamp");
+        } else {
+            panic!("Expected data in result");
+        }
     }
 }
