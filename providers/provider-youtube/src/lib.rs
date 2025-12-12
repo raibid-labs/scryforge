@@ -1716,4 +1716,52 @@ mod tests {
             panic!("Expected data in result");
         }
     }
+
+    #[test]
+    fn test_find_download_tool() {
+        // This test just validates the function runs without panic
+        // Actual result depends on system configuration
+        let _result = YouTubeProvider::find_download_tool();
+    }
+
+    #[test]
+    fn test_generate_download_command() {
+        assert_eq!(
+            YouTubeProvider::generate_download_command(
+                "yt-dlp",
+                "https://youtube.com/watch?v=abc123"
+            ),
+            "yt-dlp \"https://youtube.com/watch?v=abc123\""
+        );
+    }
+
+    fn create_test_video_item() -> Item {
+        Item {
+            id: ItemId::new("youtube", "test-video"),
+            stream_id: StreamId::new("youtube", "feed", "test"),
+            title: "Test Video".to_string(),
+            content: ItemContent::Video {
+                description: "Test description".to_string(),
+                duration_seconds: Some(300),
+                view_count: Some(1000),
+            },
+            author: None,
+            published: None,
+            updated: None,
+            url: Some("https://www.youtube.com/watch?v=test".to_string()),
+            thumbnail_url: None,
+            is_read: false,
+            is_saved: false,
+            tags: vec![],
+            metadata: HashMap::new(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_download_action_available() {
+        let provider = create_test_provider();
+        let item = create_test_video_item();
+        let actions = provider.available_actions(&item).await.unwrap();
+        assert!(actions.iter().any(|a| a.id == "download"));
+    }
 }
