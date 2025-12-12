@@ -314,8 +314,7 @@ fn parse_color(s: &str) -> Option<Color> {
     }
 
     // Hex color: #RRGGBB or RRGGBB
-    if s.starts_with('#') {
-        let hex = &s[1..];
+    if let Some(hex) = s.strip_prefix('#') {
         if hex.len() == 6 {
             if let (Ok(r), Ok(g), Ok(b)) = (
                 u8::from_str_radix(&hex[0..2], 16),
