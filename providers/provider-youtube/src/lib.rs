@@ -537,7 +537,9 @@ impl Provider for YouTubeProvider {
                 if let Some(url) = &item.url {
                     Ok(ActionResult {
                         success: true,
-                        message: Some("Enter timestamp (e.g., 1:23:45) to open at that time".to_string()),
+                        message: Some(
+                            "Enter timestamp (e.g., 1:23:45) to open at that time".to_string(),
+                        ),
                         data: Some(serde_json::json!({
                             "url": url,
                             "requires_input": true,

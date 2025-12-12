@@ -15,7 +15,11 @@ pub trait HostFunctions: Send + Sync {
     /// Make an HTTP GET request.
     ///
     /// Requires: `Capability::Network`
-    async fn http_get(&self, url: &str, headers: HashMap<String, String>) -> RuntimeResult<HttpResponse>;
+    async fn http_get(
+        &self,
+        url: &str,
+        headers: HashMap<String, String>,
+    ) -> RuntimeResult<HttpResponse>;
 
     /// Make an HTTP POST request.
     ///
@@ -40,7 +44,12 @@ pub trait HostFunctions: Send + Sync {
     /// Write to cache.
     ///
     /// Requires: `Capability::CacheWrite`
-    async fn cache_set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> RuntimeResult<()>;
+    async fn cache_set(
+        &self,
+        key: &str,
+        value: &str,
+        ttl_seconds: Option<u64>,
+    ) -> RuntimeResult<()>;
 
     /// Log a message (always allowed).
     fn log(&self, level: LogLevel, message: &str);
@@ -127,7 +136,11 @@ impl DefaultHostFunctions {
 
 #[async_trait]
 impl HostFunctions for DefaultHostFunctions {
-    async fn http_get(&self, url: &str, headers: HashMap<String, String>) -> RuntimeResult<HttpResponse> {
+    async fn http_get(
+        &self,
+        url: &str,
+        headers: HashMap<String, String>,
+    ) -> RuntimeResult<HttpResponse> {
         self.check_capability(Capability::Network)?;
 
         let mut request = self.http_client.get(url);
@@ -223,12 +236,16 @@ impl HostFunctions for DefaultHostFunctions {
         }
     }
 
-    async fn cache_set(&self, key: &str, value: &str, ttl_seconds: Option<u64>) -> RuntimeResult<()> {
+    async fn cache_set(
+        &self,
+        key: &str,
+        value: &str,
+        ttl_seconds: Option<u64>,
+    ) -> RuntimeResult<()> {
         self.check_capability(Capability::CacheWrite)?;
 
-        let expires_at = ttl_seconds.map(|ttl| {
-            std::time::Instant::now() + std::time::Duration::from_secs(ttl)
-        });
+        let expires_at =
+            ttl_seconds.map(|ttl| std::time::Instant::now() + std::time::Duration::from_secs(ttl));
 
         let mut cache = self.cache.write().await;
         cache.insert(

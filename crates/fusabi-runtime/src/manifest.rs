@@ -191,10 +191,7 @@ impl PluginManifest {
 
     /// Get the entry point file name.
     pub fn entry_point(&self) -> &str {
-        self.plugin
-            .entry_point
-            .as_deref()
-            .unwrap_or("plugin.fzb")
+        self.plugin.entry_point.as_deref().unwrap_or("plugin.fzb")
     }
 }
 

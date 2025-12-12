@@ -453,8 +453,9 @@ async fn test_jsonrpc_items_list() -> Result<()> {
     let client = HttpClientBuilder::default().build(&url)?;
 
     // Call items.list with a dummy stream (returns dummy data)
-    let result: Vec<scryforge_provider_core::Item> =
-        client.request("items.list", rpc_params!["dummy:inbox"]).await?;
+    let result: Vec<scryforge_provider_core::Item> = client
+        .request("items.list", rpc_params!["dummy:inbox"])
+        .await?;
 
     // Should get items
     assert!(!result.is_empty());
@@ -482,10 +483,7 @@ async fn test_jsonrpc_search_query() -> Result<()> {
 
     // Call search.query
     let result: Vec<scryforge_provider_core::Item> = client
-        .request(
-            "search.query",
-            rpc_params!["Test Item", json!(null)],
-        )
+        .request("search.query", rpc_params!["Test Item", json!(null)])
         .await?;
 
     assert_eq!(result.len(), 5);
@@ -497,10 +495,7 @@ async fn test_jsonrpc_search_query() -> Result<()> {
     });
 
     let result: Vec<scryforge_provider_core::Item> = client
-        .request(
-            "search.query",
-            rpc_params!["Test Item", filters],
-        )
+        .request("search.query", rpc_params!["Test Item", filters])
         .await?;
 
     assert_eq!(result.len(), 5);
@@ -655,9 +650,7 @@ async fn test_jsonrpc_sync_trigger() -> Result<()> {
     let client = HttpClientBuilder::default().build(&url)?;
 
     // Call sync.trigger
-    let result: () = client
-        .request("sync.trigger", rpc_params!["dummy"])
-        .await?;
+    let result: () = client.request("sync.trigger", rpc_params!["dummy"]).await?;
 
     // Should succeed without error
     assert_eq!(result, ());
@@ -729,7 +722,10 @@ async fn test_full_integration_insert_sync_query() -> Result<()> {
     cache.mark_starred(&item_id, true)?;
 
     let updated_items = cache.get_items(&stream.id, None)?;
-    let updated_item = updated_items.iter().find(|i| i.id.0 == "test:item:0").unwrap();
+    let updated_item = updated_items
+        .iter()
+        .find(|i| i.id.0 == "test:item:0")
+        .unwrap();
     assert!(updated_item.is_read);
     assert!(updated_item.is_saved);
 
@@ -788,8 +784,14 @@ async fn test_jsonrpc_full_workflow() -> Result<()> {
 
     // 5. Verify changes
     let items_after = cache.get_items(&stream.id, None)?;
-    let item_0 = items_after.iter().find(|i| i.id.0 == "test:item:0").unwrap();
-    let item_1 = items_after.iter().find(|i| i.id.0 == "test:item:1").unwrap();
+    let item_0 = items_after
+        .iter()
+        .find(|i| i.id.0 == "test:item:0")
+        .unwrap();
+    let item_1 = items_after
+        .iter()
+        .find(|i| i.id.0 == "test:item:1")
+        .unwrap();
     assert!(item_0.is_read);
     assert!(item_1.is_saved);
 
