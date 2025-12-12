@@ -312,27 +312,21 @@ fn render_video_content<'a>(
         ]));
     }
 
-    // Published date
+    // Published date (relative time)
     if let Some(published) = item.published {
         lines.push(Line::from(vec![
             Span::styled("Published: ", Style::default().fg(theme.muted)),
-            Span::raw(published.format("%Y-%m-%d").to_string()),
+            Span::raw(crate::time::format_relative_time(published)),
         ]));
     }
 
-    // Duration
+    // Duration (color-coded)
     if let Some(seconds) = duration_seconds {
-        let hours = seconds / 3600;
-        let minutes = (seconds % 3600) / 60;
-        let secs = seconds % 60;
-        let duration_str = if hours > 0 {
-            format!("{}:{:02}:{:02}", hours, minutes, secs)
-        } else {
-            format!("{}:{:02}", minutes, secs)
-        };
+        let duration_str = crate::time::format_duration(seconds);
+        let duration_color = crate::time::duration_color(seconds);
         lines.push(Line::from(vec![
             Span::styled("Duration: ", Style::default().fg(theme.muted)),
-            Span::raw(duration_str),
+            Span::styled(duration_str, Style::default().fg(duration_color)),
         ]));
     }
 
