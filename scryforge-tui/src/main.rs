@@ -309,16 +309,21 @@ impl App {
         };
 
         // Build provider status list from streams
-        let provider_statuses: Vec<ProviderStatus> = self.get_unique_providers()
+        let provider_statuses: Vec<ProviderStatus> = self
+            .get_unique_providers()
             .into_iter()
             .map(|provider_id| ProviderStatus {
                 name: provider_id.clone(),
-                sync_status: *self.provider_statuses.get(&provider_id).unwrap_or(&ProviderSyncStatus::Synced),
+                sync_status: *self
+                    .provider_statuses
+                    .get(&provider_id)
+                    .unwrap_or(&ProviderSyncStatus::Synced),
             })
             .collect();
 
         // Calculate total unread count
-        let unread_count: u32 = self.streams
+        let unread_count: u32 = self
+            .streams
             .iter()
             .map(|s| s.unread_count.unwrap_or(0))
             .sum();
@@ -338,10 +343,8 @@ impl App {
 
     /// Get unique provider IDs from streams
     fn get_unique_providers(&self) -> Vec<String> {
-        let mut providers: Vec<String> = self.streams
-            .iter()
-            .map(|s| s.provider_id.clone())
-            .collect();
+        let mut providers: Vec<String> =
+            self.streams.iter().map(|s| s.provider_id.clone()).collect();
         providers.sort();
         providers.dedup();
         providers
@@ -580,10 +583,8 @@ impl App {
                 self.status_message = format!("Loading items for {}...", stream.name);
 
                 // Set provider to syncing status
-                self.provider_statuses.insert(
-                    stream.provider_id.clone(),
-                    ProviderSyncStatus::Syncing,
-                );
+                self.provider_statuses
+                    .insert(stream.provider_id.clone(), ProviderSyncStatus::Syncing);
                 self.add_toast(Toast::info(format!("Syncing {}...", stream.name)));
             }
         }
@@ -699,7 +700,8 @@ impl App {
             self.status_message = "Loading collections...".to_string();
         } else {
             self.collection_picker_active = true;
-            self.status_message = "Select collection (j/k to navigate, Enter to add, Esc to cancel)".to_string();
+            self.status_message =
+                "Select collection (j/k to navigate, Enter to add, Esc to cancel)".to_string();
         }
     }
 
@@ -747,11 +749,13 @@ impl App {
                 match provider {
                     Some(ref p) => {
                         self.status_message = format!("Syncing provider: {}", p);
-                        self.provider_statuses.insert(p.clone(), ProviderSyncStatus::Syncing);
+                        self.provider_statuses
+                            .insert(p.clone(), ProviderSyncStatus::Syncing);
                         self.add_toast(Toast::info(format!("Syncing {}...", p)));
                         // TODO: Send sync command to daemon when implemented
                         // For now, simulate completion
-                        self.provider_statuses.insert(p.clone(), ProviderSyncStatus::Synced);
+                        self.provider_statuses
+                            .insert(p.clone(), ProviderSyncStatus::Synced);
                         self.add_toast(Toast::success(format!("{} synced", p)));
                     }
                     None => {
@@ -759,12 +763,14 @@ impl App {
                         self.add_toast(Toast::info("Syncing all providers..."));
                         // Mark all providers as syncing
                         for provider_id in self.get_unique_providers() {
-                            self.provider_statuses.insert(provider_id, ProviderSyncStatus::Syncing);
+                            self.provider_statuses
+                                .insert(provider_id, ProviderSyncStatus::Syncing);
                         }
                         // TODO: Send sync command to daemon when implemented
                         // Simulate completion
                         for provider_id in self.get_unique_providers() {
-                            self.provider_statuses.insert(provider_id, ProviderSyncStatus::Synced);
+                            self.provider_statuses
+                                .insert(provider_id, ProviderSyncStatus::Synced);
                         }
                         self.add_toast(Toast::success("Sync complete"));
                     }
@@ -840,7 +846,10 @@ impl App {
                     self.status_message = format!("Theme changed to: {}", name);
                     self.add_toast(Toast::success(format!("Theme: {}", name)));
                 } else {
-                    self.status_message = format!("Unknown theme: {}. Use :theme list to see available themes", name);
+                    self.status_message = format!(
+                        "Unknown theme: {}. Use :theme list to see available themes",
+                        name
+                    );
                     self.add_toast(Toast::error(format!("Unknown theme: {}", name)));
                 }
             }

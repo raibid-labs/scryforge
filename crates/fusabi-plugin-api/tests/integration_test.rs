@@ -426,11 +426,7 @@ fn test_registry_duplicate_plugin() {
 #[test]
 fn test_registry_get_plugin() {
     let temp_dir = TempDir::new().unwrap();
-    let plugin_dir = create_test_plugin(
-        temp_dir.path(),
-        "test-plugin",
-        PluginConfig::default(),
-    );
+    let plugin_dir = create_test_plugin(temp_dir.path(), "test-plugin", PluginConfig::default());
 
     let mut registry = PluginRegistry::new();
     registry.load_plugin(&plugin_dir).unwrap();

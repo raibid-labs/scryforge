@@ -7,8 +7,8 @@ use crate::host::{DefaultHostFunctions, HostFunctions};
 use async_trait::async_trait;
 use fusabi_runtime::{Bytecode, BytecodeLoader, PluginManifest, PluginPath, RuntimeResult};
 use scryforge_provider_core::{
-    Action, ActionResult, Feed, FeedId, FeedOptions, HasFeeds, Item, Provider, ProviderCapabilities,
-    ProviderHealth, Result as ProviderResult, StreamError, SyncResult,
+    Action, ActionResult, Feed, FeedId, FeedOptions, HasFeeds, Item, Provider,
+    ProviderCapabilities, ProviderHealth, Result as ProviderResult, StreamError, SyncResult,
 };
 use std::any::Any;
 use std::sync::Arc;
@@ -35,7 +35,11 @@ pub struct PluginInstance {
 impl PluginInstance {
     /// Load a plugin from a discovered path.
     pub fn load(plugin_path: &PluginPath) -> RuntimeResult<Self> {
-        info!("Loading plugin: {} v{}", plugin_path.name(), plugin_path.version());
+        info!(
+            "Loading plugin: {} v{}",
+            plugin_path.name(),
+            plugin_path.version()
+        );
 
         // Create host functions with plugin's capabilities
         let host = Arc::new(DefaultHostFunctions::new(
@@ -191,7 +195,9 @@ impl Provider for PluginProvider {
 
     async fn execute_action(&self, _item: &Item, _action: &Action) -> ProviderResult<ActionResult> {
         // TODO: Call plugin's execute_action function
-        Err(StreamError::Provider("Action execution not implemented for plugins".to_string()))
+        Err(StreamError::Provider(
+            "Action execution not implemented for plugins".to_string(),
+        ))
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -206,7 +212,11 @@ impl HasFeeds for PluginProvider {
         Ok(vec![])
     }
 
-    async fn get_feed_items(&self, _feed_id: &FeedId, _options: FeedOptions) -> ProviderResult<Vec<Item>> {
+    async fn get_feed_items(
+        &self,
+        _feed_id: &FeedId,
+        _options: FeedOptions,
+    ) -> ProviderResult<Vec<Item>> {
         // TODO: Call plugin's get_feed_items function via bytecode interpreter
         Ok(vec![])
     }
@@ -216,8 +226,8 @@ impl HasFeeds for PluginProvider {
 mod tests {
     use super::*;
     use fusabi_runtime::PluginManifest;
-    use tempfile::TempDir;
     use std::io::Write;
+    use tempfile::TempDir;
 
     fn create_test_manifest() -> String {
         r#"
@@ -233,7 +243,8 @@ capabilities = ["network"]
 id = "test"
 display_name = "Test Provider"
 has_feeds = true
-"#.to_string()
+"#
+        .to_string()
     }
 
     #[test]
