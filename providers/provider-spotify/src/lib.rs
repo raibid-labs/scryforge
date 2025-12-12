@@ -136,12 +136,17 @@ impl SpotifyProvider {
     /// # Example
     ///
     /// ```no_run
+    /// # #[cfg(unix)]
+    /// # fn main() {
     /// use provider_spotify::SpotifyProvider;
     /// use scryforge_provider_core::auth::SigilforgeClient;
     /// use std::sync::Arc;
     ///
     /// let client = SigilforgeClient::with_default_path();
     /// let provider = SpotifyProvider::new(Arc::new(client), "personal".to_string());
+    /// # }
+    /// # #[cfg(not(unix))]
+    /// # fn main() {}
     /// ```
     pub fn new(token_fetcher: Arc<dyn TokenFetcher>, account: String) -> Self {
         Self {
