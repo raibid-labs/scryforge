@@ -512,9 +512,12 @@ pub mod auth {
     //! }
     //! ```
 
-    pub use scryforge_sigilforge_client::{
-        default_socket_path, MockTokenFetcher, SigilforgeClient, SigilforgeError, TokenFetcher,
-    };
+    // Cross-platform types
+    pub use scryforge_sigilforge_client::{MockTokenFetcher, SigilforgeError, TokenFetcher};
+
+    // Unix-only types (SigilforgeClient uses Unix domain sockets)
+    #[cfg(unix)]
+    pub use scryforge_sigilforge_client::{default_socket_path, SigilforgeClient};
 }
 
 // ============================================================================
