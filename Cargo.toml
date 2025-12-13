@@ -18,6 +18,8 @@ members = [
     "providers/provider-youtube",
     "providers/provider-spotify",
     "providers/provider-mstodo",
+    # Integration crates:
+    "scarab-scryforge",
 ]
 
 [workspace.package]
