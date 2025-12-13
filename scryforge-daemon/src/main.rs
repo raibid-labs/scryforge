@@ -62,6 +62,9 @@ use scryforge_daemon::plugin::PluginManager;
 use scryforge_daemon::registry::ProviderRegistry;
 use scryforge_daemon::sync::SyncManager;
 
+// Sigilforge client for OAuth token fetching
+use scryforge_sigilforge_client::{MockTokenFetcher, SigilforgeClient, TokenFetcher};
+
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
@@ -105,9 +108,29 @@ async fn main() -> Result<()> {
     // Initialize provider registry
     let mut registry = ProviderRegistry::new();
 
-    // Load dummy provider for testing
+    // Load dummy provider for testing (provides demo data)
     info!("Loading dummy provider...");
     registry.register(provider_dummy::DummyProvider::new());
+
+    // Initialize Sigilforge client for OAuth token fetching
+    let token_fetcher: Arc<dyn TokenFetcher + Send + Sync> = {
+        let client = SigilforgeClient::with_default_path();
+        if client.is_available() {
+            info!("Sigilforge daemon available - OAuth providers enabled");
+            Arc::new(client)
+        } else {
+            info!("Sigilforge not available - YouTube provider will use mock tokens");
+            Arc::new(MockTokenFetcher::empty())
+        }
+    };
+
+    // Load YouTube provider
+    info!("Loading YouTube provider...");
+    let youtube_provider = provider_youtube::YouTubeProvider::new(
+        token_fetcher.clone(),
+        "personal".to_string(),
+    );
+    registry.register(youtube_provider);
 
     // Register plugin-based providers
     plugin_manager.register_providers(&mut registry);
