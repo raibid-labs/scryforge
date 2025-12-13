@@ -16,6 +16,8 @@ scryforge-provider-core.workspace = true
 fusabi-runtime.workspace = true
 fusabi-plugin-api.workspace = true
 provider-dummy = { path = "../providers/provider-dummy" }
+provider-youtube = { path = "../providers/provider-youtube" }
+scryforge-sigilforge-client = { path = "../scryforge-sigilforge-client" }
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
