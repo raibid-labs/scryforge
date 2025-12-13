@@ -42,8 +42,8 @@ impl Default for CollectionState {
         collection_items.insert(
             playlist_id.clone(),
             vec![
-                ItemId::new("dummy", "item-1"),
-                ItemId::new("dummy", "item-2"),
+                ItemId::new("dummy", "vid-1"),
+                ItemId::new("dummy", "vid-2"),
             ],
         );
 
@@ -87,28 +87,28 @@ impl DummyProvider {
     fn dummy_feeds() -> Vec<Feed> {
         vec![
             Feed {
-                id: FeedId("dummy:inbox".to_string()),
-                name: "Dummy Inbox".to_string(),
-                description: Some("A simulated inbox feed with test items".to_string()),
-                icon: Some("📥".to_string()),
-                unread_count: Some(3),
+                id: FeedId("dummy:subscriptions".to_string()),
+                name: "Subscriptions".to_string(),
+                description: Some("Latest videos from your subscriptions".to_string()),
+                icon: Some("📺".to_string()),
+                unread_count: Some(7),
                 total_count: Some(10),
             },
             Feed {
-                id: FeedId("dummy:updates".to_string()),
-                name: "Dummy Updates".to_string(),
-                description: Some("Simulated notification feed".to_string()),
-                icon: Some("🔔".to_string()),
-                unread_count: Some(5),
-                total_count: Some(20),
+                id: FeedId("dummy:watch-later".to_string()),
+                name: "Watch Later".to_string(),
+                description: Some("Videos saved to watch later".to_string()),
+                icon: Some("⏰".to_string()),
+                unread_count: Some(3),
+                total_count: Some(5),
             },
             Feed {
-                id: FeedId("dummy:archive".to_string()),
-                name: "Dummy Archive".to_string(),
-                description: Some("Archived test items".to_string()),
-                icon: Some("📦".to_string()),
+                id: FeedId("dummy:liked-videos".to_string()),
+                name: "Liked Videos".to_string(),
+                description: Some("Videos you've liked".to_string()),
+                icon: Some("👍".to_string()),
                 unread_count: Some(0),
-                total_count: Some(100),
+                total_count: Some(8),
             },
         ]
     }
@@ -118,130 +118,372 @@ impl DummyProvider {
         let stream_id = StreamId::new("dummy", "feed", feed_id.0.as_str());
 
         match feed_id.0.as_str() {
-            "dummy:inbox" => vec![
+            "dummy:subscriptions" => vec![
                 Item {
-                    id: ItemId::new("dummy", "item-1"),
+                    id: ItemId::new("dummy", "vid-1"),
                     stream_id: stream_id.clone(),
-                    title: "Welcome to Scryforge".to_string(),
-                    content: ItemContent::Text(
-                        "This is a dummy item from the test provider. \
-                         Scryforge is working correctly!"
-                            .to_string(),
-                    ),
+                    title: "Building a Rust CLI from Scratch".to_string(),
+                    content: ItemContent::Video {
+                        description: "In this video, we build a complete CLI application using Rust. We'll cover argument parsing with clap, error handling with anyhow, and creating a polished user experience with colored terminal output.".to_string(),
+                        duration_seconds: Some(1832), // 30:32
+                        view_count: Some(45_678),
+                    },
                     author: Some(Author {
-                        name: "Dummy Provider".to_string(),
-                        email: Some("dummy@scryforge.test".to_string()),
-                        url: None,
+                        name: "RustConf".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/RustConf".to_string()),
                         avatar_url: None,
                     }),
-                    published: Some(Utc::now() - chrono::Duration::hours(2)),
+                    published: Some(Utc::now() - chrono::Duration::days(3)),
                     updated: None,
-                    url: Some("https://example.com/item-1".to_string()),
-                    thumbnail_url: None,
+                    url: Some("https://youtube.com/watch?v=demo1".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo1/hqdefault.jpg".to_string()),
                     is_read: false,
                     is_saved: false,
-                    tags: vec!["test".to_string(), "welcome".to_string()],
+                    tags: vec!["rust".to_string(), "cli".to_string(), "tutorial".to_string()],
                     metadata: Default::default(),
                 },
                 Item {
-                    id: ItemId::new("dummy", "item-2"),
+                    id: ItemId::new("dummy", "vid-2"),
                     stream_id: stream_id.clone(),
-                    title: "Test Article with Markdown".to_string(),
-                    content: ItemContent::Markdown(
-                        "# Dummy Article\n\n\
-                         This is a **test article** with _markdown_ formatting.\n\n\
-                         - Bullet point 1\n\
-                         - Bullet point 2\n\n\
-                         [Link to example](https://example.com)"
-                            .to_string(),
-                    ),
+                    title: "Async Rust: Tokio Deep Dive".to_string(),
+                    content: ItemContent::Video {
+                        description: "A comprehensive guide to async programming in Rust using Tokio. Learn about futures, async/await, spawning tasks, and building high-performance concurrent applications.".to_string(),
+                        duration_seconds: Some(2547), // 42:27
+                        view_count: Some(89_234),
+                    },
                     author: Some(Author {
-                        name: "Test Author".to_string(),
+                        name: "Rust Programming Channel".to_string(),
                         email: None,
-                        url: Some("https://example.com/author".to_string()),
-                        avatar_url: Some("https://example.com/avatar.jpg".to_string()),
+                        url: Some("https://youtube.com/c/RustProgramming".to_string()),
+                        avatar_url: None,
                     }),
-                    published: Some(Utc::now() - chrono::Duration::hours(5)),
-                    updated: Some(Utc::now() - chrono::Duration::hours(3)),
-                    url: Some("https://example.com/item-2".to_string()),
-                    thumbnail_url: Some("https://example.com/thumb-2.jpg".to_string()),
+                    published: Some(Utc::now() - chrono::Duration::hours(18)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=demo2".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo2/hqdefault.jpg".to_string()),
                     is_read: false,
                     is_saved: true,
-                    tags: vec!["test".to_string(), "article".to_string()],
+                    tags: vec!["rust".to_string(), "async".to_string(), "tokio".to_string()],
                     metadata: Default::default(),
                 },
                 Item {
-                    id: ItemId::new("dummy", "item-3"),
+                    id: ItemId::new("dummy", "vid-3"),
                     stream_id: stream_id.clone(),
-                    title: "Read Item Example".to_string(),
-                    content: ItemContent::Text("This item has been marked as read.".to_string()),
-                    author: None,
-                    published: Some(Utc::now() - chrono::Duration::days(1)),
-                    updated: None,
-                    url: None,
-                    thumbnail_url: None,
-                    is_read: true,
-                    is_saved: false,
-                    tags: vec![],
-                    metadata: Default::default(),
-                },
-            ],
-            "dummy:updates" => vec![
-                Item {
-                    id: ItemId::new("dummy", "update-1"),
-                    stream_id: stream_id.clone(),
-                    title: "System Update Available".to_string(),
-                    content: ItemContent::Text(
-                        "A new version of the system is available.".to_string(),
-                    ),
-                    author: None,
-                    published: Some(Utc::now() - chrono::Duration::minutes(30)),
-                    updated: None,
-                    url: None,
-                    thumbnail_url: None,
-                    is_read: false,
-                    is_saved: false,
-                    tags: vec!["notification".to_string()],
-                    metadata: Default::default(),
-                },
-                Item {
-                    id: ItemId::new("dummy", "update-2"),
-                    stream_id: stream_id.clone(),
-                    title: "New Feature Released".to_string(),
-                    content: ItemContent::Markdown(
-                        "## New Feature\n\nCheck out our latest feature update!".to_string(),
-                    ),
+                    title: "What's New in Rust 1.76".to_string(),
+                    content: ItemContent::Video {
+                        description: "Quick overview of the latest Rust release. New features, stabilizations, and improvements to the language and tooling.".to_string(),
+                        duration_seconds: Some(485), // 8:05
+                        view_count: Some(156_789),
+                    },
                     author: Some(Author {
-                        name: "Product Team".to_string(),
+                        name: "Rust Foundation".to_string(),
                         email: None,
-                        url: None,
+                        url: Some("https://youtube.com/c/RustFoundation".to_string()),
                         avatar_url: None,
                     }),
-                    published: Some(Utc::now() - chrono::Duration::hours(1)),
+                    published: Some(Utc::now() - chrono::Duration::days(1)),
                     updated: None,
-                    url: Some("https://example.com/updates/feature-1".to_string()),
-                    thumbnail_url: None,
+                    url: Some("https://youtube.com/watch?v=demo3".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo3/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "news".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "vid-4"),
+                    stream_id: stream_id.clone(),
+                    title: "Building TUI Apps in Rust with Ratatui".to_string(),
+                    content: ItemContent::Video {
+                        description: "Learn how to build beautiful terminal user interfaces in Rust. We'll use the ratatui library to create an interactive dashboard with widgets, layouts, and event handling.".to_string(),
+                        duration_seconds: Some(3621), // 1:00:21
+                        view_count: Some(67_432),
+                    },
+                    author: Some(Author {
+                        name: "Terminal Wizardry".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/TerminalWizardry".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::hours(48)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=demo4".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo4/hqdefault.jpg".to_string()),
                     is_read: false,
                     is_saved: false,
-                    tags: vec!["feature".to_string(), "announcement".to_string()],
+                    tags: vec!["rust".to_string(), "tui".to_string(), "ratatui".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "vid-5"),
+                    stream_id: stream_id.clone(),
+                    title: "Rust Web Frameworks Compared: Actix vs Axum vs Rocket".to_string(),
+                    content: ItemContent::Video {
+                        description: "An in-depth comparison of the most popular Rust web frameworks. We'll look at performance, ergonomics, ecosystem, and use cases for each framework.".to_string(),
+                        duration_seconds: Some(1923), // 32:03
+                        view_count: Some(234_567),
+                    },
+                    author: Some(Author {
+                        name: "Code Comparison".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/CodeComparison".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(5)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=demo5".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo5/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "web".to_string(), "frameworks".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "vid-6"),
+                    stream_id: stream_id.clone(),
+                    title: "Error Handling in Rust: From Beginner to Expert".to_string(),
+                    content: ItemContent::Video {
+                        description: "Master error handling in Rust! We cover Result, Option, the ? operator, custom error types with thiserror, and advanced patterns for production applications.".to_string(),
+                        duration_seconds: Some(2785), // 46:25
+                        view_count: Some(178_923),
+                    },
+                    author: Some(Author {
+                        name: "Rust Mastery".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/RustMastery".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(7)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=demo6".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo6/hqdefault.jpg".to_string()),
+                    is_read: false,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "errors".to_string(), "tutorial".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "vid-7"),
+                    stream_id: stream_id.clone(),
+                    title: "Live Coding: Building a JSON-RPC Server in Rust".to_string(),
+                    content: ItemContent::Video {
+                        description: "Join me as we build a JSON-RPC server from scratch in Rust. We'll implement the spec, add async support with Tokio, and create a client library.".to_string(),
+                        duration_seconds: Some(7234), // 2:00:34
+                        view_count: Some(23_456),
+                    },
+                    author: Some(Author {
+                        name: "Live Rust Coding".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/LiveRustCoding".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::hours(6)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=demo7".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/demo7/hqdefault.jpg".to_string()),
+                    is_read: false,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "jsonrpc".to_string(), "live".to_string()],
                     metadata: Default::default(),
                 },
             ],
-            "dummy:archive" => vec![Item {
-                id: ItemId::new("dummy", "archive-1"),
-                stream_id: stream_id.clone(),
-                title: "Archived Item 1".to_string(),
-                content: ItemContent::Text("Old archived content.".to_string()),
-                author: None,
-                published: Some(Utc::now() - chrono::Duration::days(30)),
-                updated: None,
-                url: None,
-                thumbnail_url: None,
-                is_read: true,
-                is_saved: false,
-                tags: vec!["archived".to_string()],
-                metadata: Default::default(),
-            }],
+            "dummy:watch-later" => vec![
+                Item {
+                    id: ItemId::new("dummy", "wl-1"),
+                    stream_id: stream_id.clone(),
+                    title: "Understanding Rust Lifetimes Once and For All".to_string(),
+                    content: ItemContent::Video {
+                        description: "Lifetimes explained with practical examples. No more confusion about 'a, 'static, and lifetime elision rules.".to_string(),
+                        duration_seconds: Some(1456), // 24:16
+                        view_count: Some(456_789),
+                    },
+                    author: Some(Author {
+                        name: "Rust Simplified".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/RustSimplified".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(14)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=wl1".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/wl1/hqdefault.jpg".to_string()),
+                    is_read: false,
+                    is_saved: true,
+                    tags: vec!["rust".to_string(), "lifetimes".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "wl-2"),
+                    stream_id: stream_id.clone(),
+                    title: "Rust Macros: The Complete Guide".to_string(),
+                    content: ItemContent::Video {
+                        description: "Everything you need to know about macros in Rust. From macro_rules! to procedural macros, derive macros, and attribute macros.".to_string(),
+                        duration_seconds: Some(3142), // 52:22
+                        view_count: Some(123_456),
+                    },
+                    author: Some(Author {
+                        name: "Advanced Rust".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/AdvancedRust".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(10)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=wl2".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/wl2/hqdefault.jpg".to_string()),
+                    is_read: false,
+                    is_saved: true,
+                    tags: vec!["rust".to_string(), "macros".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "wl-3"),
+                    stream_id: stream_id.clone(),
+                    title: "Building a Database in Rust: Part 1".to_string(),
+                    content: ItemContent::Video {
+                        description: "First part of our series on building a relational database from scratch in Rust. We'll implement a B-tree, query parser, and basic SQL support.".to_string(),
+                        duration_seconds: Some(4567), // 1:16:07
+                        view_count: Some(89_123),
+                    },
+                    author: Some(Author {
+                        name: "Database Internals".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/DatabaseInternals".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(21)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=wl3".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/wl3/hqdefault.jpg".to_string()),
+                    is_read: false,
+                    is_saved: true,
+                    tags: vec!["rust".to_string(), "database".to_string(), "series".to_string()],
+                    metadata: Default::default(),
+                },
+            ],
+            "dummy:liked-videos" => vec![
+                Item {
+                    id: ItemId::new("dummy", "like-1"),
+                    stream_id: stream_id.clone(),
+                    title: "Rust in Production: Lessons from Discord".to_string(),
+                    content: ItemContent::Video {
+                        description: "Discord engineering team shares their experience running Rust in production at scale. Performance wins, challenges, and best practices.".to_string(),
+                        duration_seconds: Some(2134), // 35:34
+                        view_count: Some(567_890),
+                    },
+                    author: Some(Author {
+                        name: "Discord Engineering".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/DiscordEng".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(45)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=like1".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/like1/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "production".to_string(), "discord".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "like-2"),
+                    stream_id: stream_id.clone(),
+                    title: "The Rust Borrow Checker Explained Visually".to_string(),
+                    content: ItemContent::Video {
+                        description: "A visual guide to understanding how the Rust borrow checker works. See ownership, borrowing, and lifetimes in action with animations.".to_string(),
+                        duration_seconds: Some(892), // 14:52
+                        view_count: Some(892_345),
+                    },
+                    author: Some(Author {
+                        name: "Visual Rust".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/VisualRust".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(60)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=like2".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/like2/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "borrow-checker".to_string(), "visual".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "like-3"),
+                    stream_id: stream_id.clone(),
+                    title: "Writing Fast Rust Code".to_string(),
+                    content: ItemContent::Video {
+                        description: "Performance optimization techniques for Rust. Profiling, benchmarking, avoiding allocations, and leveraging zero-cost abstractions.".to_string(),
+                        duration_seconds: Some(2678), // 44:38
+                        view_count: Some(345_678),
+                    },
+                    author: Some(Author {
+                        name: "Performance Matters".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/PerfMatters".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(30)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=like3".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/like3/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "performance".to_string(), "optimization".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "like-4"),
+                    stream_id: stream_id.clone(),
+                    title: "Rust for Linux Kernel Development".to_string(),
+                    content: ItemContent::Video {
+                        description: "Overview of the Rust for Linux project. How Rust is being integrated into the Linux kernel and what it means for systems programming.".to_string(),
+                        duration_seconds: Some(1834), // 30:34
+                        view_count: Some(678_901),
+                    },
+                    author: Some(Author {
+                        name: "Linux Foundation".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/LinuxFoundation".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(90)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=like4".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/like4/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "linux".to_string(), "kernel".to_string()],
+                    metadata: Default::default(),
+                },
+                Item {
+                    id: ItemId::new("dummy", "like-5"),
+                    stream_id: stream_id.clone(),
+                    title: "Embedded Rust: Getting Started with ESP32".to_string(),
+                    content: ItemContent::Video {
+                        description: "Introduction to embedded Rust development on ESP32 microcontrollers. Set up your environment, write firmware, and deploy to hardware.".to_string(),
+                        duration_seconds: Some(2345), // 39:05
+                        view_count: Some(234_567),
+                    },
+                    author: Some(Author {
+                        name: "Embedded Rust".to_string(),
+                        email: None,
+                        url: Some("https://youtube.com/c/EmbeddedRust".to_string()),
+                        avatar_url: None,
+                    }),
+                    published: Some(Utc::now() - chrono::Duration::days(15)),
+                    updated: None,
+                    url: Some("https://youtube.com/watch?v=like5".to_string()),
+                    thumbnail_url: Some("https://i.ytimg.com/vi/like5/hqdefault.jpg".to_string()),
+                    is_read: true,
+                    is_saved: false,
+                    tags: vec!["rust".to_string(), "embedded".to_string(), "esp32".to_string()],
+                    metadata: Default::default(),
+                },
+            ],
             _ => vec![],
         }
     }
@@ -565,43 +807,43 @@ mod tests {
         let feeds = provider.list_feeds().await.unwrap();
 
         assert_eq!(feeds.len(), 3);
-        assert_eq!(feeds[0].id.0, "dummy:inbox");
-        assert_eq!(feeds[1].id.0, "dummy:updates");
-        assert_eq!(feeds[2].id.0, "dummy:archive");
+        assert_eq!(feeds[0].id.0, "dummy:subscriptions");
+        assert_eq!(feeds[1].id.0, "dummy:watch-later");
+        assert_eq!(feeds[2].id.0, "dummy:liked-videos");
     }
 
     #[tokio::test]
     async fn test_get_feed_items() {
         let provider = DummyProvider::new();
-        let feed_id = FeedId("dummy:inbox".to_string());
+        let feed_id = FeedId("dummy:subscriptions".to_string());
         let options = FeedOptions {
             include_read: true, // Include all items
             ..Default::default()
         };
 
         let items = provider.get_feed_items(&feed_id, options).await.unwrap();
-        assert_eq!(items.len(), 3);
-        assert_eq!(items[0].title, "Welcome to Scryforge");
+        assert_eq!(items.len(), 7);
+        assert_eq!(items[0].title, "Building a Rust CLI from Scratch");
     }
 
     #[tokio::test]
     async fn test_get_feed_items_exclude_read() {
         let provider = DummyProvider::new();
-        let feed_id = FeedId("dummy:inbox".to_string());
+        let feed_id = FeedId("dummy:subscriptions".to_string());
         let options = FeedOptions {
             include_read: false,
             ..Default::default()
         };
 
         let items = provider.get_feed_items(&feed_id, options).await.unwrap();
-        assert_eq!(items.len(), 2); // One item is marked as read
+        assert_eq!(items.len(), 5); // Two items are marked as read
         assert!(!items.iter().any(|item| item.is_read));
     }
 
     #[tokio::test]
     async fn test_get_feed_items_with_limit() {
         let provider = DummyProvider::new();
-        let feed_id = FeedId("dummy:inbox".to_string());
+        let feed_id = FeedId("dummy:subscriptions".to_string());
         let options = FeedOptions {
             limit: Some(2),
             ..Default::default()
@@ -708,7 +950,7 @@ mod tests {
     async fn test_add_duplicate_to_collection() {
         let provider = DummyProvider::new();
         let collection_id = CollectionId("dummy:playlist-1".to_string());
-        let item_id = ItemId::new("dummy", "item-1");
+        let item_id = ItemId::new("dummy", "vid-1");
 
         // Try to add item that's already in collection
         let result = provider.add_to_collection(&collection_id, &item_id).await;
@@ -719,7 +961,7 @@ mod tests {
     async fn test_remove_from_collection() {
         let provider = DummyProvider::new();
         let collection_id = CollectionId("dummy:playlist-1".to_string());
-        let item_id = ItemId::new("dummy", "item-1");
+        let item_id = ItemId::new("dummy", "vid-1");
 
         // Remove item from collection
         provider
@@ -774,7 +1016,7 @@ mod tests {
         assert_eq!(reading_list.item_count, 0);
 
         // Add an item
-        let item_id = ItemId::new("dummy", "item-1");
+        let item_id = ItemId::new("dummy", "vid-1");
         provider
             .add_to_collection(&collection_id, &item_id)
             .await
