@@ -50,13 +50,17 @@
 //! ```
 
 use anyhow::Result;
+use std::sync::Arc;
 use tracing::{info, Level};
 use tracing_subscriber::FmtSubscriber;
 
 // Use modules from the library crate
 use scryforge_daemon::api;
+use scryforge_daemon::cache::SqliteCache;
+use scryforge_daemon::config::Config;
 use scryforge_daemon::plugin::PluginManager;
-use scryforge_daemon::registry;
+use scryforge_daemon::registry::ProviderRegistry;
+use scryforge_daemon::sync::SyncManager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -68,8 +72,17 @@ async fn main() -> Result<()> {
 
     info!("Starting scryforge-daemon v{}", env!("CARGO_PKG_VERSION"));
 
-    // TODO: Load configuration from config.toml
-    // let config = load_config()?;
+    // Load configuration from config.toml
+    let config = match Config::load_default() {
+        Ok(cfg) => {
+            info!("Loaded configuration from default path");
+            cfg
+        }
+        Err(e) => {
+            info!("Failed to load config, using defaults: {}", e);
+            Config::default()
+        }
+    };
 
     // Initialize plugin manager
     let mut plugin_manager = PluginManager::new();
@@ -90,7 +103,7 @@ async fn main() -> Result<()> {
     }
 
     // Initialize provider registry
-    let mut registry = registry::ProviderRegistry::new();
+    let mut registry = ProviderRegistry::new();
 
     // Load dummy provider for testing
     info!("Loading dummy provider...");
@@ -125,14 +138,29 @@ async fn main() -> Result<()> {
         }
     }
 
-    // TODO: Initialize cache (SQLite)
-    // let cache = Cache::open(&config.cache_path)?;
+    // Initialize cache (SQLite)
+    let cache_path = config.cache_path()?;
+    info!("Initializing cache at: {}", cache_path.display());
+    let cache = match SqliteCache::open_at(&cache_path) {
+        Ok(c) => {
+            info!("Cache initialized successfully");
+            Arc::new(c)
+        }
+        Err(e) => {
+            info!("Failed to initialize cache: {}", e);
+            return Err(e);
+        }
+    };
 
-    // TODO: Connect to Sigilforge for auth
-    // let sigilforge = SigilforgeClient::connect(&config.sigilforge_socket)?;
+    // Wrap registry in Arc for sharing with sync manager and API
+    let registry = Arc::new(registry);
 
-    // TODO: Start sync loop
-    // let sync_handle = tokio::spawn(sync_loop(registry.clone(), cache.clone()));
+    // Start sync manager with background sync tasks
+    let mut sync_manager = SyncManager::new(config.clone(), Arc::clone(&registry), Arc::clone(&cache));
+    match sync_manager.start().await {
+        Ok(_) => info!("Sync manager started successfully"),
+        Err(e) => info!("Sync manager startup: {}", e),
+    }
 
     // Start the JSON-RPC API server
     let (server_handle, addr) = api::start_server().await?;
@@ -146,29 +174,12 @@ async fn main() -> Result<()> {
 
     info!("Shutting down...");
 
+    // Shutdown sync manager gracefully
+    sync_manager.shutdown().await;
+
     // Stop the server gracefully
     server_handle.stop()?;
 
     info!("Daemon stopped");
     Ok(())
 }
-
-// ============================================================================
-// TODO: Module stubs for future implementation
-// ============================================================================
-
-// mod config {
-//     //! Configuration loading and management
-// }
-
-// mod cache {
-//     //! SQLite-based caching for items and streams
-// }
-
-// mod sync {
-//     //! Background sync loop for fetching new data
-// }
-
-// mod sigilforge {
-//     //! Client for communicating with Sigilforge auth daemon
-// }
