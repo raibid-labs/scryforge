@@ -58,19 +58,24 @@
 //! ```
 
 use anyhow::Result;
-use crossterm::event::KeyCode;
-use fusabi_tui_core::prelude::*;
-use fusabi_tui_widgets::prelude::*;
-use ratatui::layout::{Constraint, Direction, Layout, Rect};
+use fusabi_tui_core::{buffer::Buffer, layout::{Constraint, Direction, Layout, Rect}};
+use fusabi_tui_render::prelude::*;
 use scryforge_provider_core::{Collection, Item, Stream};
 use std::collections::HashMap;
+use std::io::stdout;
 use tokio::sync::mpsc;
 
 pub mod command;
 mod daemon_client;
 pub mod search;
+pub mod theme;
+pub mod time;
+pub mod widgets;
+
 use daemon_client::{get_daemon_url, spawn_client_task};
 use daemon_client::{Command as DaemonCommand, Message};
+use theme::Theme;
+use widgets::*;
 
 fn main() -> Result<()> {
     // Initialize logging to file
@@ -94,7 +99,18 @@ async fn async_main() -> Result<()> {
     let _client_handle = spawn_client_task(daemon_url, cmd_rx, msg_tx);
 
     // Initialize terminal
-    let mut terminal = TerminalWrapper::new()?;
+    use crossterm::{
+        execute,
+        terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen},
+    };
+
+    enable_raw_mode()?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen)?;
+
+    let mut renderer = CrosstermRenderer::new(stdout)?;
+    renderer.show_cursor(false)?;
+    renderer.clear()?;
 
     // Create app state (starts empty, will be populated from daemon)
     let mut app = App::new(cmd_tx.clone());
@@ -105,9 +121,11 @@ async fn async_main() -> Result<()> {
     // Main event loop
     loop {
         // Render
-        terminal.terminal().draw(|frame| {
-            app.render(frame);
-        })?;
+        let size = renderer.size()?;
+        let mut buffer = Buffer::new(size);
+        app.render(&mut buffer);
+        renderer.draw(&buffer)?;
+        renderer.flush()?;
 
         // Handle daemon messages (non-blocking)
         while let Ok(msg) = msg_rx.try_recv() {
@@ -129,8 +147,149 @@ async fn async_main() -> Result<()> {
     // Send shutdown command to daemon client
     let _ = cmd_tx.send(DaemonCommand::Shutdown);
 
-    // Cleanup handled by TerminalWrapper::Drop
+    // Cleanup terminal
+    renderer.show_cursor(true)?;
+    disable_raw_mode()?;
+    // Note: renderer doesn't implement ExecutableCommand, so we need the raw output
+    // This is fine because we're exiting anyway
+
     Ok(())
+}
+
+// ============================================================================
+// Event Handling
+// ============================================================================
+
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers};
+
+/// Application-level input events.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AppEvent {
+    /// A key was pressed
+    Key(KeyEvent),
+    /// Terminal was resized
+    Resize(u16, u16),
+    /// Tick for periodic updates
+    Tick,
+    /// Quit the application
+    Quit,
+}
+
+/// Poll for input events with a timeout.
+pub fn poll_event(timeout: std::time::Duration) -> Result<Option<AppEvent>> {
+    if event::poll(timeout)? {
+        match event::read()? {
+            Event::Key(key) => {
+                // Handle Ctrl+C as quit
+                if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
+                    return Ok(Some(AppEvent::Quit));
+                }
+                Ok(Some(AppEvent::Key(key)))
+            }
+            Event::Resize(w, h) => Ok(Some(AppEvent::Resize(w, h))),
+            _ => Ok(None),
+        }
+    } else {
+        Ok(Some(AppEvent::Tick))
+    }
+}
+
+/// Represents which pane/component has focus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FocusedPane {
+    #[default]
+    StreamList,
+    ItemList,
+    Preview,
+    Omnibar,
+}
+
+impl FocusedPane {
+    /// Move focus to the next pane (left to right).
+    pub fn next(self) -> Self {
+        match self {
+            Self::StreamList => Self::ItemList,
+            Self::ItemList => Self::Preview,
+            Self::Preview => Self::StreamList,
+            Self::Omnibar => Self::StreamList,
+        }
+    }
+
+    /// Move focus to the previous pane (right to left).
+    pub fn prev(self) -> Self {
+        match self {
+            Self::StreamList => Self::Preview,
+            Self::ItemList => Self::StreamList,
+            Self::Preview => Self::ItemList,
+            Self::Omnibar => Self::StreamList,
+        }
+    }
+}
+
+/// Simple list state for tracking selection in lists.
+#[derive(Debug, Clone, Default)]
+pub struct ListState {
+    /// Currently selected index
+    pub selected: Option<usize>,
+    /// Total number of items
+    pub len: usize,
+    /// Scroll offset for virtual scrolling
+    pub offset: usize,
+}
+
+impl ListState {
+    pub fn new(len: usize) -> Self {
+        Self {
+            selected: if len > 0 { Some(0) } else { None },
+            len,
+            offset: 0,
+        }
+    }
+
+    pub fn select_next(&mut self) {
+        if self.len == 0 {
+            return;
+        }
+        self.selected = Some(match self.selected {
+            Some(i) if i + 1 < self.len => i + 1,
+            Some(_) => 0, // Wrap to beginning
+            None => 0,
+        });
+    }
+
+    pub fn select_prev(&mut self) {
+        if self.len == 0 {
+            return;
+        }
+        self.selected = Some(match self.selected {
+            Some(0) => self.len.saturating_sub(1), // Wrap to end
+            Some(i) => i - 1,
+            None => 0,
+        });
+    }
+
+    pub fn select_first(&mut self) {
+        if self.len > 0 {
+            self.selected = Some(0);
+        }
+    }
+
+    pub fn select_last(&mut self) {
+        if self.len > 0 {
+            self.selected = Some(self.len.saturating_sub(1));
+        }
+    }
+
+    pub fn update_len(&mut self, len: usize) {
+        self.len = len;
+        if let Some(i) = self.selected {
+            if i >= len {
+                self.selected = if len > 0 { Some(len - 1) } else { None };
+            }
+        } else if len > 0 {
+            self.selected = Some(0);
+        }
+    }
 }
 
 // ============================================================================
@@ -253,8 +412,8 @@ impl App {
         }
     }
 
-    fn render(&mut self, frame: &mut ratatui::Frame) {
-        let size = frame.area();
+    fn render(&mut self, buffer: &mut Buffer) {
+        let size = buffer.area;
 
         // Remove expired toasts
         self.toasts.retain(|t| !t.is_expired());
@@ -262,8 +421,8 @@ impl App {
         // Main layout: content + omnibar + status bar
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(0),    // Content
+            .constraints(&[
+                Constraint::Fill(1),   // Content
                 Constraint::Length(3), // Omnibar
                 Constraint::Length(1), // Status bar
             ])
@@ -272,7 +431,7 @@ impl App {
         // Content layout: streams | items | preview
         let content_chunks = Layout::default()
             .direction(Direction::Horizontal)
-            .constraints([
+            .constraints(&[
                 Constraint::Percentage(20), // Streams
                 Constraint::Percentage(35), // Items
                 Constraint::Percentage(45), // Preview
@@ -282,24 +441,24 @@ impl App {
         // Render streams
         StreamListWidget::new(&self.streams, self.stream_state.selected, &self.theme)
             .focused(self.focused == FocusedPane::StreamList)
-            .render(frame, content_chunks[0]);
+            .render(content_chunks[0], buffer);
 
         // Render items
         ItemListWidget::new(&self.items, self.item_state.selected, &self.theme)
             .focused(self.focused == FocusedPane::ItemList)
-            .render(frame, content_chunks[1]);
+            .render(content_chunks[1], buffer);
 
         // Render preview
         let selected_item = self.item_state.selected.and_then(|i| self.items.get(i));
         PreviewWidget::new(selected_item, &self.theme)
             .focused(self.focused == FocusedPane::Preview)
-            .render(frame, content_chunks[2]);
+            .render(content_chunks[2], buffer);
 
         // Render omnibar
         OmnibarWidget::new(&self.omnibar_input, &self.theme)
             .active(self.omnibar_active)
             .suggestions(&self.omnibar_suggestions)
-            .render(frame, main_chunks[1]);
+            .render(main_chunks[1], buffer);
 
         // Render enhanced status bar
         let connection_status = if self.daemon_connected {
@@ -332,12 +491,12 @@ impl App {
             .provider_statuses(&provider_statuses)
             .unread_count(unread_count)
             .search_filter(self.active_search_filter.as_deref())
-            .render(frame, main_chunks[2]);
+            .render(main_chunks[2], buffer);
 
         // Render toasts (overlay on top-right)
         if let Some(toast) = self.toasts.last() {
             let toast_area = self.calculate_toast_area(size);
-            ToastWidget::new(toast, &self.theme).render(frame, toast_area);
+            ToastWidget::new(toast, &self.theme).render(toast_area, buffer);
         }
     }
 
@@ -375,7 +534,7 @@ impl App {
     }
 }
 
-impl AppState for App {
+impl App {
     fn handle_event(&mut self, event: AppEvent) -> bool {
         match event {
             AppEvent::Quit => {
@@ -501,9 +660,7 @@ impl AppState for App {
     fn should_quit(&self) -> bool {
         self.quit
     }
-}
 
-impl App {
     fn navigate_down(&mut self) {
         match self.focused {
             FocusedPane::StreamList => {
@@ -833,7 +990,6 @@ impl App {
     /// Handle theme management commands.
     fn handle_theme_command(&mut self, cmd: command::ThemeCommand) {
         use command::ThemeCommand;
-        use fusabi_tui_widgets::theme::Theme;
         match cmd {
             ThemeCommand::List => {
                 let themes = Theme::available_themes();

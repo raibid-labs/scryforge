@@ -4,8 +4,6 @@ members = [
     "crates/scryforge-provider-core",
     "crates/fusabi-runtime",
     "crates/fusabi-plugin-api",
-    "crates/fusabi-tui-core",
-    "crates/fusabi-tui-widgets",
     "scryforge-daemon",
     "scryforge-sigilforge-client",
     "scryforge-tui",
@@ -36,10 +34,6 @@ tokio = { version = "1.40", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
-# TUI
-ratatui = "0.29"
-crossterm = "0.28"
-
 # Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -64,6 +58,9 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 scryforge-provider-core = { path = "crates/scryforge-provider-core" }
 fusabi-runtime = { path = "crates/fusabi-runtime" }
 fusabi-plugin-api = { path = "crates/fusabi-plugin-api" }
-fusabi-tui-core = { path = "crates/fusabi-tui-core" }
-fusabi-tui-widgets = { path = "crates/fusabi-tui-widgets" }
 scryforge-sigilforge-client = { path = "scryforge-sigilforge-client" }
+
+# Fusabi TUI Runtime (external)
+fusabi-tui-core = { git = "https://github.com/fusabi-lang/fusabi-tui-runtime" }
+fusabi-tui-widgets = { git = "https://github.com/fusabi-lang/fusabi-tui-runtime" }
+fusabi-tui-render = { git = "https://github.com/fusabi-lang/fusabi-tui-runtime" }
