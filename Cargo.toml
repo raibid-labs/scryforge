@@ -61,6 +61,6 @@ fusabi-plugin-api = { path = "crates/fusabi-plugin-api" }
 scryforge-sigilforge-client = { path = "scryforge-sigilforge-client" }
 
 # Fusabi TUI Runtime (external)
-fusabi-tui-core = { git = "https://github.com/fusabi-lang/fusabi-tui-runtime" }
-fusabi-tui-widgets = { git = "https://github.com/fusabi-lang/fusabi-tui-runtime" }
-fusabi-tui-render = { git = "https://github.com/fusabi-lang/fusabi-tui-runtime" }
+fusabi-tui-core = "0.1"
+fusabi-tui-widgets = "0.1"
+fusabi-tui-render = "0.1"
