@@ -12,6 +12,7 @@ members = [
     "providers/provider-bookmarks",
     "providers/provider-email-imap",
     "providers/provider-reddit",
+    "providers/provider-miniflux",
     "providers/provider-rss",
     "providers/provider-youtube",
     "providers/provider-spotify",
