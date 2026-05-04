@@ -28,5 +28,9 @@ opml = "1.1"
 # Error handling
 thiserror.workspace = true
 
+# Home/config directory resolution for transcribe output
+directories = "5.0"
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tempfile = "3.10"
