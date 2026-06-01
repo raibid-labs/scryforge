@@ -346,8 +346,14 @@ impl Plugin for ScryforgePlugin {
     }
 }
 
-// Export the plugin creation function for dynamic loading
+// Export the plugin creation function for dynamic loading.
+//
+// The returned `Box<dyn Plugin>` is not strictly FFI-safe by clippy's
+// definition, but this is the established ABI scarab uses to load plugins
+// (the host expects a boxed trait object), so the lint is intentionally
+// allowed here.
 #[no_mangle]
+#[allow(improper_ctypes_definitions)]
 pub extern "C" fn create_plugin() -> Box<dyn Plugin> {
     Box::new(ScryforgePlugin::new())
 }
