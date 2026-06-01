@@ -122,7 +122,10 @@ impl ScryforgeClient {
 
                 // Extract provider ID from stream ID (format: "provider_id::stream_name")
                 if let Some(provider_id) = stream_id.split("::").next() {
-                    *stats.by_provider.entry(provider_id.to_string()).or_insert(0) += unread_count;
+                    *stats
+                        .by_provider
+                        .entry(provider_id.to_string())
+                        .or_insert(0) += unread_count;
                 }
             }
         }

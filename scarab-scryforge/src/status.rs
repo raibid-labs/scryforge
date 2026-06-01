@@ -152,7 +152,10 @@ pub fn build_detailed_status(
         }
 
         if provider_counts.len() > 3 {
-            items.push(RenderItem::Text(format!(", +{} more", provider_counts.len() - 3)));
+            items.push(RenderItem::Text(format!(
+                ", +{} more",
+                provider_counts.len() - 3
+            )));
         }
 
         items.push(RenderItem::Text(")".to_string()));
@@ -172,9 +175,9 @@ mod tests {
         assert!(!items.is_empty());
 
         // Should contain "0 unread"
-        let has_zero = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("0 unread"))
-        });
+        let has_zero = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("0 unread")));
         assert!(has_zero);
     }
 
@@ -183,9 +186,9 @@ mod tests {
         let items = build_status_items(5, None, true);
 
         // Should contain the count
-        let has_count = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("5"))
-        });
+        let has_count = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("5")));
         assert!(has_count);
 
         // Should have bold formatting
@@ -199,9 +202,9 @@ mod tests {
         let items = build_status_items(3, Some(sync_time), true);
 
         // Should contain time reference
-        let has_time = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("ago"))
-        });
+        let has_time = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("ago")));
         assert!(has_time);
     }
 
@@ -210,9 +213,9 @@ mod tests {
         let items = build_status_items(0, None, false);
 
         // Should contain warning indicator
-        let has_warning = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("⚠"))
-        });
+        let has_warning = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("⚠")));
         assert!(has_warning);
     }
 
@@ -222,9 +225,9 @@ mod tests {
         assert!(!items.is_empty());
 
         // Should contain mailbox emoji
-        let has_mailbox = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("📬"))
-        });
+        let has_mailbox = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("📬")));
         assert!(has_mailbox);
     }
 
@@ -239,9 +242,9 @@ mod tests {
         let items = build_detailed_status(10, &providers, true);
 
         // Should contain provider names
-        let has_reddit = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("reddit"))
-        });
+        let has_reddit = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("reddit")));
         assert!(has_reddit);
     }
 
@@ -258,9 +261,9 @@ mod tests {
         let items = build_detailed_status(12, &providers, true);
 
         // Should show "+2 more" indicator
-        let has_more = items.iter().any(|item| {
-            matches!(item, RenderItem::Text(s) if s.contains("more"))
-        });
+        let has_more = items
+            .iter()
+            .any(|item| matches!(item, RenderItem::Text(s) if s.contains("more")));
         assert!(has_more);
     }
 }

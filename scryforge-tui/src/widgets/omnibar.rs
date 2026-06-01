@@ -3,7 +3,11 @@
 use crate::theme::Theme;
 use fusabi_tui_core::{buffer::Buffer, layout::Rect, style::Style};
 use fusabi_tui_widgets::{
-    block::Block, borders::Borders, paragraph::Paragraph, text::{Line, Span}, widget::Widget,
+    block::Block,
+    borders::Borders,
+    paragraph::Paragraph,
+    text::{Line, Span},
+    widget::Widget,
 };
 
 /// Widget for command palette / quick search.
