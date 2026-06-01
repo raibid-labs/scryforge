@@ -7,7 +7,10 @@ use fusabi_tui_core::{
     style::{Modifier, Style},
 };
 use fusabi_tui_widgets::{
-    block::Block, borders::Borders, list::{List, ListItem, ListState as WidgetListState}, text::{Line, Span},
+    block::Block,
+    borders::Borders,
+    list::{List, ListItem, ListState as WidgetListState},
+    text::{Line, Span},
 };
 use scryforge_provider_core::Stream;
 

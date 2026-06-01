@@ -209,10 +209,10 @@ impl UnifiedSavedView {
     fn sort_items(&self, items: &mut [UnifiedSavedItem], sort_order: SortOrder) {
         match sort_order {
             SortOrder::SavedDateDesc => {
-                items.sort_by(|a, b| b.saved_at.cmp(&a.saved_at));
+                items.sort_by_key(|b| std::cmp::Reverse(b.saved_at));
             }
             SortOrder::SavedDateAsc => {
-                items.sort_by(|a, b| a.saved_at.cmp(&b.saved_at));
+                items.sort_by_key(|a| a.saved_at);
             }
             SortOrder::PublishedDateDesc => {
                 items.sort_by(|a, b| {
@@ -763,13 +763,13 @@ impl UnifiedCollectionsView {
                 collections.sort_by_key(|c| c.collection.item_count);
             }
             CollectionSortOrder::ItemCountDesc => {
-                collections.sort_by(|a, b| b.collection.item_count.cmp(&a.collection.item_count));
+                collections.sort_by_key(|b| std::cmp::Reverse(b.collection.item_count));
             }
             CollectionSortOrder::UpdatedDesc => {
-                collections.sort_by(|a, b| b.last_updated.cmp(&a.last_updated));
+                collections.sort_by_key(|b| std::cmp::Reverse(b.last_updated));
             }
             CollectionSortOrder::UpdatedAsc => {
-                collections.sort_by(|a, b| a.last_updated.cmp(&b.last_updated));
+                collections.sort_by_key(|a| a.last_updated);
             }
             CollectionSortOrder::Provider => {
                 collections.sort_by(|a, b| {

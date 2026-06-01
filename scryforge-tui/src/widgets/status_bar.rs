@@ -2,7 +2,11 @@
 
 use crate::theme::Theme;
 use fusabi_tui_core::{buffer::Buffer, layout::Rect, style::Style};
-use fusabi_tui_widgets::{paragraph::Paragraph, text::{Line, Span}, widget::Widget};
+use fusabi_tui_widgets::{
+    paragraph::Paragraph,
+    text::{Line, Span},
+    widget::Widget,
+};
 
 /// Status of a provider's sync state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,8 +146,8 @@ impl<'a> StatusBarWidget<'a> {
             ));
         }
 
-        let paragraph = Paragraph::new(Line::from(spans))
-            .style(Style::new().bg(self.theme.selection_bg));
+        let paragraph =
+            Paragraph::new(Line::from(spans)).style(Style::new().bg(self.theme.selection_bg));
 
         paragraph.render(area, buffer);
     }

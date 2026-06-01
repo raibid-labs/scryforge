@@ -41,10 +41,7 @@ impl Default for CollectionState {
         );
         collection_items.insert(
             playlist_id.clone(),
-            vec![
-                ItemId::new("dummy", "vid-1"),
-                ItemId::new("dummy", "vid-2"),
-            ],
+            vec![ItemId::new("dummy", "vid-1"), ItemId::new("dummy", "vid-2")],
         );
 
         let reading_list_id = "dummy:reading-list".to_string();

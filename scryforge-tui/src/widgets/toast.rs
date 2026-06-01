@@ -1,10 +1,12 @@
 //! Toast notification widget.
 
 use crate::theme::Theme;
-use fusabi_tui_core::{buffer::Buffer, layout::Rect, style::{Modifier, Style}};
-use fusabi_tui_widgets::{
-    block::Block, borders::Borders, paragraph::Paragraph, widget::Widget,
+use fusabi_tui_core::{
+    buffer::Buffer,
+    layout::Rect,
+    style::{Modifier, Style},
 };
+use fusabi_tui_widgets::{block::Block, borders::Borders, paragraph::Paragraph, widget::Widget};
 use std::time::{Duration, Instant};
 
 /// Type of toast notification

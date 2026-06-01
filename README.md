@@ -16,7 +16,7 @@ Scryforge follows a **daemon + TUI** architecture:
 ```
 ┌─────────────────┐      local API       ┌─────────────────────┐
 │  scryforge-tui  │ ◄──────────────────► │  scryforge-daemon   │
-│   (Ratatui)     │    (Unix socket /    │      ("hub")        │
+│ (fusabi-tui-rt) │    (Unix socket /    │      ("hub")        │
 └─────────────────┘     JSON-RPC)        └─────────┬───────────┘
                                                    │
                            ┌───────────────────────┼───────────────────────┐
@@ -35,7 +35,7 @@ Scryforge follows a **daemon + TUI** architecture:
 ```
 
 - **Daemon ("hub")**: Manages provider plugins, handles sync/caching, retrieves auth tokens from Sigilforge, and exposes a local API.
-- **TUI**: A Ratatui-based terminal client with explorer-style navigation (sidebars, lists, preview pane, omnibar).
+- **TUI**: A fusabi-tui-runtime-based terminal client (fusabi-tui-core / fusabi-tui-widgets) with explorer-style navigation (sidebars, lists, preview pane, omnibar).
 - **Providers**: Pluggable data sources implementing capability traits (feeds, collections, saved items, etc.).
 
 ## Core Abstractions
@@ -113,7 +113,7 @@ scryforge/
 ├── crates/
 │   ├── fusabi-streams-core/   # Core traits and types (Stream, Item, Actions)
 │   ├── fusabi-tui-core/       # TUI event loop and state wiring
-│   └── fusabi-tui-widgets/    # Reusable Ratatui widgets
+│   └── fusabi-tui-widgets/    # Reusable fusabi-tui-runtime widgets
 ├── scryforge-daemon/          # The hub daemon
 ├── scryforge-tui/             # The TUI client
 ├── providers/                 # Provider crate implementations

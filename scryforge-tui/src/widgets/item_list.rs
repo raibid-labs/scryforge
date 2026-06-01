@@ -7,7 +7,10 @@ use fusabi_tui_core::{
     style::{Modifier, Style},
 };
 use fusabi_tui_widgets::{
-    block::Block, borders::Borders, list::{List, ListItem, ListState as WidgetListState}, text::{Line, Span},
+    block::Block,
+    borders::Borders,
+    list::{List, ListItem, ListState as WidgetListState},
+    text::{Line, Span},
 };
 use scryforge_provider_core::Item;
 
@@ -109,9 +112,7 @@ impl<'a> ItemListWidget<'a> {
                     title_spans.push(Span::raw("  "));
                     title_spans.push(Span::styled(
                         duration_str,
-                        Style::new()
-                            .fg(duration_color)
-                            .add_modifier(Modifier::BOLD),
+                        Style::new().fg(duration_color).add_modifier(Modifier::BOLD),
                     ));
                 }
 

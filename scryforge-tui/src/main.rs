@@ -58,7 +58,10 @@
 //! ```
 
 use anyhow::Result;
-use fusabi_tui_core::{buffer::Buffer, layout::{Constraint, Direction, Layout, Rect}};
+use fusabi_tui_core::{
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+};
 use fusabi_tui_render::prelude::*;
 use scryforge_provider_core::{Collection, Item, Stream};
 use std::collections::HashMap;

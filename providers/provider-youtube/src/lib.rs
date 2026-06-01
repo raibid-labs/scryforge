@@ -455,7 +455,6 @@ impl YouTubeProvider {
         format!("{} \"{}\"", tool, video_url)
     }
 
-
     /// Parse RFC 3339 timestamp to DateTime<Utc>.
     fn parse_timestamp(timestamp: &str) -> Option<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(timestamp)
@@ -566,7 +565,8 @@ impl YouTubeProvider {
         let token = self.get_access_token().await?;
         let url = format!("{}/videos/rate", Self::API_BASE);
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .bearer_auth(&token)
             .query(&[("id", video_id), ("rating", rating)])
@@ -578,7 +578,8 @@ impl YouTubeProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(StreamError::Provider(format!(
-                "Failed to rate video: {} - {}", status, error_text
+                "Failed to rate video: {} - {}",
+                status, error_text
             )));
         }
 
@@ -599,7 +600,8 @@ impl YouTubeProvider {
             }
         });
 
-        let response = self.client
+        let response = self
+            .client
             .post(&url)
             .bearer_auth(&token)
             .query(&[("part", "snippet")])
@@ -612,7 +614,8 @@ impl YouTubeProvider {
             let status = response.status();
             let error_text = response.text().await.unwrap_or_default();
             return Err(StreamError::Provider(format!(
-                "Failed to subscribe: {} - {}", status, error_text
+                "Failed to subscribe: {} - {}",
+                status, error_text
             )));
         }
 
@@ -893,18 +896,27 @@ impl Provider for YouTubeProvider {
                     // Get channel_id from item author URL or metadata
                     if let Some(ref author) = item.author {
                         if let Some(ref url) = author.url {
-                            if let Some(channel_id) = url.strip_prefix("https://www.youtube.com/channel/") {
+                            if let Some(channel_id) =
+                                url.strip_prefix("https://www.youtube.com/channel/")
+                            {
                                 match self.subscribe_to_channel(channel_id).await {
-                                    Ok(()) => return Ok(ActionResult {
-                                        success: true,
-                                        message: Some(format!("Subscribed to {}!", author.name)),
-                                        data: None,
-                                    }),
-                                    Err(e) => return Ok(ActionResult {
-                                        success: false,
-                                        message: Some(format!("Failed to subscribe: {}", e)),
-                                        data: None,
-                                    }),
+                                    Ok(()) => {
+                                        return Ok(ActionResult {
+                                            success: true,
+                                            message: Some(format!(
+                                                "Subscribed to {}!",
+                                                author.name
+                                            )),
+                                            data: None,
+                                        })
+                                    }
+                                    Err(e) => {
+                                        return Ok(ActionResult {
+                                            success: false,
+                                            message: Some(format!("Failed to subscribe: {}", e)),
+                                            data: None,
+                                        })
+                                    }
                                 }
                             }
                         }

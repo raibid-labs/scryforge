@@ -7,7 +7,11 @@ use fusabi_tui_core::{
     style::{Modifier, Style},
 };
 use fusabi_tui_widgets::{
-    block::Block, borders::Borders, paragraph::Paragraph, text::{Line, Span}, widget::Widget,
+    block::Block,
+    borders::Borders,
+    paragraph::Paragraph,
+    text::{Line, Span},
+    widget::Widget,
 };
 use scryforge_provider_core::Item;
 

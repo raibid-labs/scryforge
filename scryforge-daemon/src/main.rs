@@ -63,7 +63,9 @@ use scryforge_daemon::registry::ProviderRegistry;
 use scryforge_daemon::sync::SyncManager;
 
 // Sigilforge client for OAuth token fetching
-use scryforge_sigilforge_client::{MockTokenFetcher, SigilforgeClient, TokenFetcher};
+#[cfg(unix)]
+use scryforge_sigilforge_client::SigilforgeClient;
+use scryforge_sigilforge_client::{MockTokenFetcher, TokenFetcher};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -112,7 +114,10 @@ async fn main() -> Result<()> {
     info!("Loading dummy provider...");
     registry.register(provider_dummy::DummyProvider::new());
 
-    // Initialize Sigilforge client for OAuth token fetching
+    // Initialize Sigilforge client for OAuth token fetching.
+    // SigilforgeClient uses Unix domain sockets and is only available on Unix
+    // platforms; other platforms fall back to mock tokens.
+    #[cfg(unix)]
     let token_fetcher: Arc<dyn TokenFetcher + Send + Sync> = {
         let client = SigilforgeClient::with_default_path();
         if client.is_available() {
@@ -123,13 +128,16 @@ async fn main() -> Result<()> {
             Arc::new(MockTokenFetcher::empty())
         }
     };
+    #[cfg(not(unix))]
+    let token_fetcher: Arc<dyn TokenFetcher + Send + Sync> = {
+        info!("Sigilforge not supported on this platform - YouTube provider will use mock tokens");
+        Arc::new(MockTokenFetcher::empty())
+    };
 
     // Load YouTube provider
     info!("Loading YouTube provider...");
-    let youtube_provider = provider_youtube::YouTubeProvider::new(
-        token_fetcher.clone(),
-        "personal".to_string(),
-    );
+    let youtube_provider =
+        provider_youtube::YouTubeProvider::new(token_fetcher.clone(), "personal".to_string());
     registry.register(youtube_provider);
 
     // Register plugin-based providers
@@ -179,7 +187,8 @@ async fn main() -> Result<()> {
     let registry = Arc::new(registry);
 
     // Start sync manager with background sync tasks
-    let mut sync_manager = SyncManager::new(config.clone(), Arc::clone(&registry), Arc::clone(&cache));
+    let mut sync_manager =
+        SyncManager::new(config.clone(), Arc::clone(&registry), Arc::clone(&cache));
     match sync_manager.start().await {
         Ok(_) => info!("Sync manager started successfully"),
         Err(e) => info!("Sync manager startup: {}", e),

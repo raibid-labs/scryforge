@@ -108,10 +108,7 @@ impl ScryforgePlugin {
             match client.get_sync_status().await {
                 Ok(status) => {
                     // Find the most recent sync time across all providers
-                    let most_recent = status
-                        .values()
-                        .filter_map(|s| s.last_sync)
-                        .max();
+                    let most_recent = status.values().filter_map(|s| s.last_sync).max();
 
                     if let Some(sync_time) = most_recent {
                         *self.last_sync.write().await = Some(sync_time);
@@ -186,10 +183,7 @@ impl ScryforgePlugin {
                         // Update sync status
                         match c.get_sync_status().await {
                             Ok(status) => {
-                                let most_recent = status
-                                    .values()
-                                    .filter_map(|s| s.last_sync)
-                                    .max();
+                                let most_recent = status.values().filter_map(|s| s.last_sync).max();
 
                                 if let Some(sync_time) = most_recent {
                                     *last_sync.write().await = Some(sync_time);
@@ -217,9 +211,12 @@ impl Plugin for ScryforgePlugin {
             MenuItem::new("Sync All", MenuAction::Remote("sync_all".to_string()))
                 .with_icon("🔄")
                 .with_shortcut("Ctrl+S"),
-            MenuItem::new("Mark All Read", MenuAction::Remote("mark_all_read".to_string()))
-                .with_icon("✓")
-                .with_shortcut("Ctrl+R"),
+            MenuItem::new(
+                "Mark All Read",
+                MenuAction::Remote("mark_all_read".to_string()),
+            )
+            .with_icon("✓")
+            .with_shortcut("Ctrl+R"),
             MenuItem::new("Open TUI", MenuAction::Command("scryforge-tui".to_string()))
                 .with_icon("📊")
                 .with_shortcut("Ctrl+T"),
@@ -349,8 +346,14 @@ impl Plugin for ScryforgePlugin {
     }
 }
 
-// Export the plugin creation function for dynamic loading
+// Export the plugin creation function for dynamic loading.
+//
+// The returned `Box<dyn Plugin>` is not strictly FFI-safe by clippy's
+// definition, but this is the established ABI scarab uses to load plugins
+// (the host expects a boxed trait object), so the lint is intentionally
+// allowed here.
 #[no_mangle]
+#[allow(improper_ctypes_definitions)]
 pub extern "C" fn create_plugin() -> Box<dyn Plugin> {
     Box::new(ScryforgePlugin::new())
 }
